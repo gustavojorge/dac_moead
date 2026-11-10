@@ -132,31 +132,44 @@ Roda `make rebuild` em `src/comolsd` (g++ com `-std=c++17 -O2`), move o executá
 
 ### 3.2 Estrutura de instâncias esperada
 
-O executável lê as instâncias de **`../instances`, relativo ao diretório de trabalho** (`pathFolders = ".."` em [instance_info.cpp](src/comolsd/instance_info.cpp)). Como os scripts executam `./exe/main` a partir de `scripts/`, a pasta deve ficar na **raiz do repositório**:
+As instâncias ficam no repositório [MO_WFLOP-archive/instances](https://github.com/gustavojorge/MO_WFLOP-archive/tree/main/instances) e não são versionadas aqui.
+
+O executável lê as instâncias de **`../instances`, relativo ao diretório de trabalho** (`pathFolders = ".."` em [instance_info.cpp](src/comolsd/instance_info.cpp)). Como os scripts executam `./exe/main` a partir de `scripts/`, a pasta deve ficar na **raiz do repositório**.
+
+> **Atenção:** no MO_WFLOP-archive a pasta se chama `instances/sites/`, mas o código procura `instances/site/` (sem "s"). Depois de copiar, crie um link: `ln -s sites instances/site`.
 
 ```
 instances/                      # na raiz do repositório (não versionada)
-├── site/
+├── site/                       # (= sites/ no MO_WFLOP-archive)
 │   ├── A/ ... J/               # instâncias de referência
 │   ├── 0/ ... 505/             # instâncias sintéticas
-│   │   ├── availablePositions.txt
-│   │   ├── fixed_wf.txt
-│   │   └── turbines_per_zone.txt   # obrigatório só para instâncias numéricas
-└── wtg/
-    ├── NREL-15-240.txt         # curva da turbina móvel (15 MW, rotor 240 m)
-    └── NREL-10-179.txt         # curva da turbina fixa (10 MW, rotor 179 m)
+│   │   ├── availablePositions.txt  # lido: fundações candidatas das zonas
+│   │   ├── fixed_wf.txt            # lido: turbinas fixas
+│   │   ├── turbines_per_zone.txt   # lido: só para instâncias numéricas
+│   │   ├── geometry.txt            # não lido: contorno dos polígonos das zonas
+│   │   ├── info.json               # não lido: metadados (só nas instâncias A–J)
+│   │   └── plot.png                # não lido: visualização da instância
+├── wtg/
+│   ├── NREL-15-240.txt         # curva da turbina móvel (15 MW, rotor 240 m)
+│   └── NREL-10-179.txt         # curva da turbina fixa (10 MW, rotor 179 m)
+└── wind/
+    └── RVO_*.txt               # rosas dos ventos (não lidas pelo código atual)
 ```
 
-Formato dos arquivos (separados por espaço, **um registro por linha, terminando com quebra de linha**):
+Formato dos arquivos (separados por espaço ou tab, **um registro por linha, terminando com quebra de linha**):
 
 | Arquivo | Colunas | Observação |
 |---|---|---|
-| `availablePositions.txt` | `x y profundidade custo zona` | Posições candidatas (fundações). Zona começa em 1 e o arquivo deve estar ordenado por zona: o número de zonas é lido da última linha. Máximo de 3 zonas. |
-| `fixed_wf.txt` | `x y 0.0 zona` | Turbinas já existentes (fixas). Só `x` e `y` são usados. |
+| `availablePositions.txt` | `x y profundidade custo zona` | Fundações candidatas. Zona começa em 1 e o arquivo deve estar ordenado por zona: o número de zonas é lido da última linha. Máximo de 3 zonas. |
+| `fixed_wf.txt` | `x y 0.0 z z` | Turbinas já existentes (fixas). Só `x` e `y` são usados; `z` é o número da "zona" fixa (ex.: 3). |
 | `turbines_per_zone.txt` | `n1 n2 n3` | Quantidade de turbinas a posicionar por zona. Para A–J os valores estão fixos no código (`turbines_instace`). |
-| `wtg/*.txt` | `vento potência Ct` | Curva de potência e coeficiente de empuxo por velocidade de vento. |
+| `geometry.txt` | `x y` por vértice, linha em branco entre polígonos | Contorno externo de cada zona. |
+| `wtg/*.txt` | `vento(m/s) potência(MW) Ct` | Curva de potência e coeficiente de empuxo por velocidade de vento. |
+| `wind/RVO_*.txt` | `ângulo velocidade probabilidade` | Distribuição do vento em 12 setores de 30° e velocidades de 0 a 30 m/s. |
 
-As instâncias sintéticas são geradas por [script.py](src/comolsd/src/instance_generation/script.py) (polígonos aleatórios, buracos/estruturas proibidas, profundidade via Perlin noise, custo linear na profundidade). O script cria `../instances/<N>/`; mova para `instances/site/<N>/`.
+A seção [4.1](#41-instâncias-zonas-e-turbinas-fixas) explica o que esses dados representam, com exemplos.
+
+As instâncias sintéticas são geradas por [script.py](src/comolsd/src/instance_generation/script.py) (detalhes na seção 4.1). O script cria `../instances/<N>/`; mova para `instances/site/<N>/`.
 
 ### 3.3 Linha de comando do executável
 
@@ -201,14 +214,51 @@ Em `<pasta_saida>/`:
 
 Código: [generate_rSolution.cpp](src/comolsd/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp), [instance_info.cpp](src/comolsd/instance_info.cpp), [headers/wind_farm_entities/](src/comolsd/headers/wind_farm_entities/).
 
-### 4.1 Parque eólico
+### 4.1 Instâncias: zonas e turbinas fixas
 
-- **Zonas**: até 3 regiões poligonais. Cada zona tem uma lista discreta de **fundações candidatas** (`Foundation {x, y, cost}`), lidas de `availablePositions.txt`. O custo depende da profundidade (`custo = 659934 − 72606.6 · profundidade`, no gerador).
-- **Turbinas fixas** (`fixd`): parque já existente, fora das zonas. Não se movem, mas geram e sofrem esteira e sua potência entra na função objetivo. Modelo NREL 10 MW: diâmetro 179 m, altura 119 m.
-- **Turbinas móveis**: as que o algoritmo posiciona. Modelo NREL 15 MW: diâmetro 240 m, altura 150 m.
-- **Vento**: um único cenário por execução (velocidade `wind` e direção `angle`). A potência nominal e o Ct de cada modelo são lidos da curva (`wtg/*.txt`) na velocidade do vento livre; se a velocidade não existir na tabela, é feita a média entre linhas vizinhas.
+Uma instância descreve um sítio offshore com **até 3 zonas**. As coordenadas estão em metros, numa faixa de ~100–150 km. Há dois tipos de zona:
 
-### 4.2 Solução
+- **Zonas disponíveis** (1, 2, …): polígonos onde o algoritmo pode instalar turbinas novas.
+- **Zona fixa** (o número seguinte, ex.: 3): um parque já existente, fora dos polígonos. Suas turbinas não se movem, mas entram no cálculo do wake e da potência.
+
+![Instância 10](https://raw.githubusercontent.com/gustavojorge/MO_WFLOP-archive/main/instances/sites/10/plot.png)
+
+*Instância 10: duas zonas disponíveis (contorno magenta, cor = profundidade em m) e o parque fixo (pontos laranja).*
+
+**Como uma zona é construída** (gerador [script.py](src/comolsd/src/instance_generation/script.py) e [gen_layout.py](src/comolsd/src/instance_generation/gen_layout.py)):
+
+1. **Polígono**: de 3 a 9 vértices aleatórios, escalado para ter entre 20 e 550 km² (a soma das zonas fica entre 100 e 1500 km²). Zonas que se sobrepõem são reposicionadas. O contorno vai para `geometry.txt`.
+2. **Áreas proibidas**: de 2 a 5 **buracos** (polígonos convexos dentro da zona) e **estruturas** (faixas que cortam a zona a partir da borda, como cabos ou dutos), num total de 5 a 8 recortes. Na figura, são as reentrâncias e os buracos brancos.
+3. **Fundações candidatas**: a zona recortada é coberta por um **grid regular de ~160 m**. Cada centro de célula dentro da zona vira uma fundação em `availablePositions.txt`.
+4. **Profundidade**: gerada por Perlin noise, em torno de −25 m (−32 a −19 m na instância 10).
+5. **Custo da fundação**: linear na profundidade, `custo = 659934 − 72606.6 · profundidade`. Quanto mais fundo, mais caro (~2,0 M a ~3,0 M por fundação na instância 10).
+6. **Turbinas a instalar por zona**: `int(U(0.005, 0.02) · nº de fundações da zona)`, salvo em `turbines_per_zone.txt`.
+7. **Parque fixo**: de 5 a 75 turbinas num grid retangular com **1440 m** entre turbinas, colado a uma aresta de uma zona sorteada e sem invadir nenhuma zona. Fica em `fixed_wf.txt`.
+
+**Exemplos reais**
+
+| Instância | Zona 1 | Zona 2 | Turbinas fixas |
+|---|---|---|---|
+| `10` | 11.182 fundações, 63 turbinas | 8.335 fundações, 82 turbinas | 64 |
+| `A` | 50,4 km², 2 buracos, 2.187 fundações, 26 turbinas | 26,8 km², 4 buracos, 1.009 fundações, 8 turbinas | 42 |
+
+As instâncias A–J têm um `info.json` com área, número de buracos e opções de quantidade de turbinas para densidades de potência de 4, 6 e 8 MW/km² (ex.: zona 1 de A: 13, 20 ou 26 turbinas de 15 MW). As quantidades usadas estão fixas em `turbines_instace` ([instance_info.cpp](src/comolsd/instance_info.cpp#L26)).
+
+**Como o código usa esses dados**
+
+- `availablePositions.txt` → `foundations[z]` (`Foundation {x, y, cost}`). A posição da fundação no arquivo, dentro da zona, é o índice `p` usado em `grid[z][p]`.
+- `fixed_wf.txt` → `fixd` (turbinas NREL 10 MW).
+- `geometry.txt`, `info.json` e `plot.png` **não** são lidos: os polígonos já estão representados pelas fundações que sobraram dentro deles.
+- O grid de 160 m é menor que o diâmetro do rotor (240 m), então duas fundações vizinhas podem receber turbinas. Não há distância mínima, e a proximidade só é penalizada pelo wake.
+
+### 4.2 Turbinas e vento (dados do wake effect)
+
+- **Turbinas móveis**: as que o algoritmo posiciona. Modelo NREL 15 MW: diâmetro 240 m, altura do cubo 150 m, curva `wtg/NREL-15-240.txt`.
+- **Turbinas fixas** (`fixd`): modelo NREL 10 MW: diâmetro 179 m, altura 119 m, curva `wtg/NREL-10-179.txt`.
+- **Curvas** (`vento potência Ct`): para a velocidade do vento livre `U`, o código lê a potência (`P_curva`, em MW) e o coeficiente de empuxo `Ct` de cada modelo. Se `U` não estiver na tabela, usa a média entre as linhas vizinhas. Esses valores são os mesmos para todas as turbinas do mesmo modelo, pois são lidos com o vento livre, antes do wake.
+- **Vento**: um único cenário por execução, com velocidade `wind` (m/s) e direção `angle` (graus; o vetor do vento é `(cos θ, sin θ)`). Os dois vêm da linha de comando. Os arquivos `wind/RVO_*.txt` (rosas dos ventos de sítios offshore holandeses, ex.: HKN = Hollandse Kust Noord) têm a distribuição `ângulo velocidade probabilidade`, mas a leitura deles está comentada em `instance_info.cpp`. Nos experimentos, cada (instância, run) reaproveita o cenário salvo em `dataset/moead/<inst>/<run>/log.txt` (ex.: A/run 1 → vento 13 m/s, ângulo 330°).
+
+### 4.3 Solução
 
 ```cpp
 struct Solution {
@@ -222,7 +272,7 @@ Os ids das turbinas móveis começam em `fixd.size()`, para não colidir com os 
 
 A solução inicial é aleatória: para cada zona, sorteia `turbines_per_zone[z]` fundações distintas.
 
-### 4.3 Restrições do layout
+### 4.4 Restrições do layout
 
 Todas são garantidas **pela representação e pelos operadores** (não há penalização nem soluções inviáveis):
 
@@ -234,7 +284,7 @@ Todas são garantidas **pela representação e pelos operadores** (não há pena
 
 Não existe restrição explícita de distância mínima entre turbinas; a proximidade é penalizada indiretamente pelo efeito esteira.
 
-### 4.4 Funções objetivo
+### 4.5 Funções objetivo
 
 **f1 — custo** (`calculate_cost`): soma do custo das fundações ocupadas, guardada negativa para ser maximizada.
 
@@ -248,7 +298,7 @@ f1(x) = − Σ custo(fundação de cada turbina móvel)
 P_i = 0.6127 · P_curva · v_i³
 ```
 
-### 4.5 Efeito esteira (wake effect)
+### 4.6 Efeito esteira (wake effect)
 
 Modelo do tipo Jensen/Park ([calculate_interference](src/comolsd/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp#L46)). Para a turbina *a* gerando esteira sobre a turbina *b*:
 
@@ -268,7 +318,7 @@ Modelo do tipo Jensen/Park ([calculate_interference](src/comolsd/src/global_modu
 
 A potência total exige comparar todos os pares de turbinas: custo O((n + F)²) por avaliação.
 
-### 4.6 Orçamento de avaliações
+### 4.7 Orçamento de avaliações
 
 - **Máximo**: `stop_criteria = 1.000.000` avaliações ([main.cpp](src/comolsd/main.cpp#L12)). O contador global é `countRevalue`.
 - **O que conta como 1 avaliação**: cada chamada de `calculate_cost` + `calculate_power` sobre uma nova solução, isto é, cada solução da população inicial, cada filho de crossover, cada mutação e cada vizinho gerado na busca local.

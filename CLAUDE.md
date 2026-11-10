@@ -21,10 +21,11 @@ Não há testes automatizados. Para validar uma mudança, compile e rode uma ins
 
 ## Entrada
 
-O executável lê `../instances/` relativo ao **diretório de trabalho** (rodando de `scripts/`, é `<repo>/instances/`, que não é versionado):
+O executável lê `../instances/` relativo ao **diretório de trabalho** (rodando de `scripts/`, é `<repo>/instances/`, que não é versionado). As instâncias estão em https://github.com/gustavojorge/MO_WFLOP-archive/tree/main/instances. Lá a pasta se chama `sites/`, mas o código lê `site/`; use `ln -s sites instances/site`.
 
-- `instances/site/<inst>/availablePositions.txt` — `x y prof custo zona` (zona 1..3, ordenado por zona)
-- `instances/site/<inst>/fixed_wf.txt` — turbinas fixas
+- `instances/site/<inst>/availablePositions.txt` — `x y prof custo zona`: fundações candidatas num grid de ~160 m dentro dos polígonos das zonas (já sem buracos/estruturas), zona 1..3, ordenado por zona
+- `instances/site/<inst>/fixed_wf.txt` — turbinas fixas (parque existente, "zona" seguinte às disponíveis)
+- `geometry.txt`, `info.json`, `plot.png` e `instances/wind/RVO_*.txt` existem, mas não são lidos pelo código
 - `instances/site/<inst>/turbines_per_zone.txt` — só para instâncias numéricas (A–J estão em `turbines_instace` em `instance_info.cpp`)
 - `instances/wtg/NREL-15-240.txt` (móvel) e `NREL-10-179.txt` (fixa) — `vento potência Ct`
 
