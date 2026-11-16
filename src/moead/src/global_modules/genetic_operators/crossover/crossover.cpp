@@ -32,13 +32,12 @@ bool InOffspring(int turbine_index, const vector<int> &grid) {
   return grid[turbine_index] != 0;
 }
 
-void crossoverAux(Solution &parent_solutionA, Solution &parent_solutionB, Solution &offspring_solution, int zone){
+void crossoverAux(Solution &parent_solutionA, Solution &parent_solutionB, Solution &offspring_solution, int zone, int &id_new){
   offspring_solution.grid[zone].resize(parent_solutionA.grid[zone].size(), 0);
 
   int rand_int = rand() % parent_solutionA.grid[zone].size();
   int index = -1;
   int lastIndex = 0;
-  int id_new = fixd.size();
   Turbine turbina;
 
   // First part of crossover with parent_solutionA
@@ -87,8 +86,10 @@ Solution crossover(Solution &parent_solutionA, Solution &parent_solutionB){
   offspring_solution.grid.resize(num_zones);
   offspring_solution.turbines.resize(num_zones);
 
+  int id_new = fixd.size();
+
   for(int j = 0; j < num_zones; j++){
-    crossoverAux(parent_solutionA, parent_solutionB, offspring_solution, j);
+    crossoverAux(parent_solutionA, parent_solutionB, offspring_solution, j, id_new);
   }
 
   calculate_cost(offspring_solution);
