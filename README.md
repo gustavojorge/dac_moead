@@ -1,8 +1,10 @@
 # dac_moead — MOEA/D para o Wind Farm Layout Optimization Problem (WFLOP) multiobjetivo
 
-Este repositório contém a implementação em C++ do **MOEA/D** (Multi-Objective Evolutionary Algorithm based on Decomposition), além do NSGA-II e de buscas locais Pareto (PLS e Anytime-PLS), aplicados ao problema de **posicionamento de turbinas em parques eólicos offshore** com dois objetivos: **minimizar o custo de fundação** e **maximizar a potência gerada**.
+Este repositório contém a implementação em C++ do **MOEA/D** (Multi-Objective Evolutionary Algorithm based on Decomposition) aplicada ao problema de **posicionamento de turbinas em parques eólicos offshore** com dois objetivos: **minimizar o custo de fundação** e **maximizar a potência gerada**.
 
 Também contém os scripts shell para compilar e executar os experimentos em lote (várias instâncias × 20 execuções).
+
+O código vem da branch [`moead-runner`](https://github.com/gustavojorge/MO_WFLOP-experiment-runner/tree/moead-runner) do MO_WFLOP-experiment-runner: só o MOEA/D, sem busca local e sem as versões híbridas.
 
 ---
 
@@ -23,36 +25,35 @@ Também contém os scripts shell para compilar e executar os experimentos em lot
 
 ```
 .
-├── makeall.sh                     # Compila src/comolsd e move o executável para scripts/exe/main
+├── makeall.sh                     # Compila src/moead e move o executável para scripts/exe/moead
 ├── scripts/
 │   ├── batch.sh                   # Dispara lotes de instâncias em background (nohup)
 │   ├── main.sh                    # Para cada instância do lote, roda 20 execuções
-│   ├── exe/                       # Executáveis compilados (main)
 │   └── smaller_scripts/
-│       ├── create_folders.sh      # Cria dataset/<...>/<instância>/<run>/
-│       └── run.sh                 # Chama ./exe/main para (instância, run)
+│       ├── create_folders.sh      # Cria dataset/moead/<instância>/<run>/
+│       └── moead.sh               # Chama ./exe/moead para (instância, run) e grava log.txt
 ├── dataset/
-│   └── moead/<inst>/<run>/        # Resultados de referência do MOEA/D (log.txt guarda vento/ângulo)
-└── src/comolsd/
-    ├── main.cpp                   # Ponto de entrada: escolhe algoritmo e busca local
+│   └── moead/<inst>/<run>/        # Resultados de referência (A, 172, 240, 456), ver seção 3.5
+└── src/moead/
+    ├── main.cpp                   # Ponto de entrada: lê a instância e chama moead()
     ├── instance_info.cpp          # Leitura da instância, curvas das turbinas, turbinas fixas
     ├── Makefile
     ├── headers/                   # .h espelhando a árvore de src/
+    ├── metafeatures/              # Extração de metafeatures (não compilado)
     └── src/
         ├── metaheuristics/
-        │   ├── moead/             # moead.cpp, moead_hybrid.cpp e modules/
-        │   ├── nsga2/
-        │   └── comolsd/
+        │   ├── moead/             # moead.cpp e modules/
+        │   └── nsga2/             # compilado, mas não chamado pelo main
         ├── global_modules/
         │   ├── generate_initial_population/   # Solução aleatória + funções objetivo + wake effect
         │   ├── genetic_operators/             # crossover/ e mutation/
-        │   ├── local_search/                  # PLS, Anytime-PLS, vizinhança, factory
         │   ├── dominates.cpp, isEqual.cpp
         ├── adaptive_grid/         # Arquivo Pareto limitado com grid adaptativo
-        └── instance_generation/   # Gerador de instâncias sintéticas (Python)
+        ├── instance_generation/   # Gerador de instâncias sintéticas (Python)
+        └── utils/                 # Validador, comparação e plot (não compilados)
 ```
 
-Todo o código está em `src/comolsd` (o nome é histórico): um único executável `main` contém MOEA/D, NSGA-II e as buscas locais.
+O executável contém apenas o MOEA/D. O `nsga2.cpp` entra na compilação, mas o `main.cpp` não o chama.
 
 ---
 
@@ -72,7 +73,7 @@ Neste código **os dois objetivos são maximizados**: o custo é guardado negati
 
 ### 2.2 Fluxo do algoritmo
 
-Implementação principal: [moead_hybrid.cpp](src/comolsd/src/metaheuristics/moead/moead_hybrid.cpp) (versão chamada pelo `main`). A versão [moead.cpp](src/comolsd/src/metaheuristics/moead/moead.cpp) é idêntica sem a busca local, mas **não é chamada** pelo `main.cpp` atual.
+Implementação: [moead.cpp](src/moead/src/metaheuristics/moead/moead.cpp).
 
 ```
 1. Inicialização
@@ -91,32 +92,24 @@ Implementação principal: [moead_hybrid.cpp](src/comolsd/src/metaheuristics/moe
      2.3 Atualiza z* com o máximo de cada objetivo no arquivo Pareto global
      2.4 Para cada j ∈ B(i): se g_te(filho | λⱼ, z*) ≤ g_te(xⱼ | λⱼ, z*), xⱼ ← filho
          (feito para filho1 e depois para filho2; sem limite de substituições)
-   Com probabilidade ls_prob = avaliações / 1.000.000: executa a busca local sobre o arquivo Pareto
 ```
+
+B(i) guarda apenas os índices dos vizinhos. Quando o filho vence, ele é **copiado** para `population[j]`: a solução do subproblema j muda, e o peso λⱼ continua o mesmo.
 
 ### 2.3 Módulos principais
 
 | Módulo | Arquivo | Função |
 |---|---|---|
-| Vetores de peso | [generate_weight_vectors.cpp](src/comolsd/src/metaheuristics/moead/modules/generate_weight_vectors.cpp) | Gera N pares (w1, w2) igualmente espaçados com w1 + w2 = 1 |
-| Vizinhança | [generate_neighborhood.cpp](src/comolsd/src/metaheuristics/moead/modules/generate_neighborhood.cpp) | Para cada λᵢ, ordena os demais por distância euclidiana e pega os T primeiros |
-| Ponto de referência | [get_best_z_point.cpp](src/comolsd/src/metaheuristics/moead/modules/get_best_z_point.cpp) | z* = máximo de cada objetivo na população |
-| Tchebycheff | [tchebycheff.cpp](src/comolsd/src/metaheuristics/moead/modules/tchebycheff.cpp) | `calculate_gte`: max λk·\|fk − z*k\| (sem normalização dos objetivos) |
-| População externa (EP) | [updateEP.cpp](src/comolsd/src/metaheuristics/moead/modules/updateEP.cpp) | Implementação clássica da EP — **não usada**; o papel de EP é do arquivo Pareto global |
-| Arquivo Pareto global | [BoundedParetoSet.cpp](src/comolsd/src/adaptive_grid/BoundedParetoSet.cpp), [ParetoSet.cpp](src/comolsd/src/adaptive_grid/ParetoSet.cpp) | Guarda até 300 soluções não dominadas; quando cheio, remove uma solução da célula mais populosa de um grid adaptativo (32×32 células) |
-| Busca local | [local_search_factory.cpp](src/comolsd/src/global_modules/local_search/local_search_factory.cpp), [pareto_ls.cpp](src/comolsd/src/global_modules/local_search/pareto_ls.cpp), [anytime_pls.cpp](src/comolsd/src/global_modules/local_search/anytime_pls.cpp) | `pls`, `apls` ou `none` |
+| Vetores de peso | [generate_weight_vectors.cpp](src/moead/src/metaheuristics/moead/modules/generate_weight_vectors.cpp) | Gera N pares (w1, w2) igualmente espaçados com w1 + w2 = 1 |
+| Vizinhança | [generate_neighborhood.cpp](src/moead/src/metaheuristics/moead/modules/generate_neighborhood.cpp) | Para cada λᵢ, ordena os demais por distância euclidiana e pega os T primeiros |
+| Ponto de referência | [get_best_z_point.cpp](src/moead/src/metaheuristics/moead/modules/get_best_z_point.cpp) | z* = máximo de cada objetivo na população |
+| Tchebycheff | [tchebycheff.cpp](src/moead/src/metaheuristics/moead/modules/tchebycheff.cpp) | `calculate_gte`: max λk·\|fk − z*k\| (sem normalização dos objetivos) |
+| População externa (EP) | [updateEP.cpp](src/moead/src/metaheuristics/moead/modules/updateEP.cpp) | Implementação clássica da EP — **não usada**; o papel de EP é do arquivo Pareto global |
+| Arquivo Pareto global | [BoundedParetoSet.cpp](src/moead/src/adaptive_grid/BoundedParetoSet.cpp), [ParetoSet.cpp](src/moead/src/adaptive_grid/ParetoSet.cpp) | Guarda até 300 soluções não dominadas; quando cheio, remove uma solução da célula mais populosa de um grid adaptativo (32×32 células) |
 
 ### 2.4 Arquivo Pareto global (`pareto`)
 
-Variável global `BoundedParetoSet * pareto` declarada em [main.cpp](src/comolsd/main.cpp). **Toda avaliação** (geração aleatória, crossover, mutação, vizinhos da busca local) chama `pareto->adicionarSol(...)`. É esse arquivo que é salvo como resultado do algoritmo — não a população do MOEA/D.
-
-### 2.5 Busca local (versão híbrida)
-
-- **PLS** (`pls`): copia o arquivo Pareto para um arquivo local; enquanto houver solução não explorada, escolhe uma aleatoriamente, gera 163 vizinhos (mutações distintas) e tenta inserir todos.
-- **Anytime-PLS** (`apls`): fase 1 escolhe a solução não explorada de maior contribuição de hipervolume (`ohiv`) e para no primeiro vizinho que a domine (ou no primeiro inserido); fase 2 explora a vizinhança completa.
-- **none**: não faz busca local (ver [problemas conhecidos](#7-problemas-conhecidos)).
-
-Os vizinhos são gerados com a mesma `mutation()` do algoritmo genético, então cada vizinho conta como avaliação e é inserido no arquivo Pareto global. A população do MOEA/D **não** é alterada pela busca local.
+Variável global `BoundedParetoSet * pareto` declarada em [main.cpp](src/moead/main.cpp). **Toda avaliação** (geração aleatória, crossover, mutação) chama `pareto->adicionarSol(...)`. É esse arquivo que é salvo como resultado do algoritmo, e não a população do MOEA/D.
 
 ---
 
@@ -128,13 +121,20 @@ Os vizinhos são gerados com a mesma `mutation()` do algoritmo genético, então
 ./makeall.sh
 ```
 
-Roda `make rebuild` em `src/comolsd` (g++ com `-std=c++17 -O2`), move o executável para `scripts/exe/main` e dá permissão de execução aos scripts.
+Roda `make rebuild` em `src/moead` (g++ com `-std=c++17 -Werror -O2`), move o executável para `scripts/exe/moead` e dá permissão de execução aos scripts.
+
+> **Atenção:** o `Makefile` gera um executável chamado `nsga2` (`OUTPUT = nsga2`), mas o `makeall.sh` procura `moead`, então o script para com erro no `mv`. Até corrigir, compile à mão:
+>
+> ```bash
+> make -C src/moead rebuild && mkdir -p scripts/exe && mv src/moead/nsga2 scripts/exe/moead
+> chmod +x makeall.sh scripts/*.sh scripts/smaller_scripts/*.sh
+> ```
 
 ### 3.2 Estrutura de instâncias esperada
 
 As instâncias ficam no repositório [MO_WFLOP-archive/instances](https://github.com/gustavojorge/MO_WFLOP-archive/tree/main/instances) e não são versionadas aqui.
 
-O executável lê as instâncias de **`../instances`, relativo ao diretório de trabalho** (`pathFolders = ".."` em [instance_info.cpp](src/comolsd/instance_info.cpp)). Como os scripts executam `./exe/main` a partir de `scripts/`, a pasta deve ficar na **raiz do repositório**.
+O executável lê as instâncias de **`../instances`, relativo ao diretório de trabalho** (`pathFolders = ".."` em [instance_info.cpp](src/moead/instance_info.cpp)). Como os scripts executam `./exe/moead` a partir de `scripts/`, a pasta deve ficar na **raiz do repositório**.
 
 > **Atenção:** no MO_WFLOP-archive a pasta se chama `instances/sites/`, mas o código procura `instances/site/` (sem "s"). Depois de copiar, crie um link: `ln -s sites instances/site`.
 
@@ -169,50 +169,55 @@ Formato dos arquivos (separados por espaço ou tab, **um registro por linha, ter
 
 A seção [4.1](#41-instâncias-zonas-e-turbinas-fixas) explica o que esses dados representam, com exemplos.
 
-As instâncias sintéticas são geradas por [script.py](src/comolsd/src/instance_generation/script.py) (detalhes na seção 4.1). O script cria `../instances/<N>/`; mova para `instances/site/<N>/`.
+As instâncias sintéticas são geradas por [script.py](src/moead/src/instance_generation/script.py) (detalhes na seção 4.1). O script cria `../instances/<N>/`; mova para `instances/site/<N>/`.
 
 ### 3.3 Linha de comando do executável
 
 ```bash
-./exe/main <instância> <pasta_saida/> <ângulo> <vento> <algoritmo> <busca_local>
+cd scripts
+./exe/moead <instância> <pasta_saida/> [<ângulo> <vento>]
 ```
 
 | Arg | Exemplo | Descrição |
 |---|---|---|
 | `instância` | `A`, `240` | Nome da pasta em `instances/site/` |
-| `pasta_saida/` | `../dataset/x/A/1/` | Prefixo de saída — **precisa da barra final** |
-| `ângulo` | `330` | Direção do vento em graus (só é lido se houver ≥ 4 argumentos; padrão 30) |
-| `vento` | `13` | Velocidade do vento em m/s (padrão 10) |
-| `algoritmo` | `moead_hybrid` | `moead_hybrid` ou `nsga2_hybrid` (padrão) |
-| `busca_local` | `apls` | `pls`, `apls` (padrão) ou `none` |
+| `pasta_saida/` | `../dataset/moead/A/1/` | Prefixo de saída — **precisa da barra final** (padrão `./`) |
+| `ângulo` | `330` | Direção do vento em graus. Só é lido se `vento` também for passado. Padrão: **30** |
+| `vento` | `13` | Velocidade do vento em m/s. Padrão: **10** |
+
+O `moead.sh` passa só os dois primeiros argumentos, então os experimentos em lote rodam sempre com **vento de 10 m/s e ângulo de 30°** (ver [problemas conhecidos](#7-problemas-conhecidos)).
 
 ### 3.4 Execução em lote
 
 ```bash
 cd scripts
-mkdir -p logs/moead_hybrid
-ALGO=moead_hybrid LS=apls ./batch.sh
+mkdir -p logs
+./batch.sh
 ```
 
-- `batch.sh` cria as pastas de saída e dispara 4 lotes em background com `nohup`, cada um chamando `main.sh` com uma lista de instâncias.
-- `main.sh` roda **20 execuções** de cada instância, chamando `smaller_scripts/run.sh <instância> <run>`.
-- `run.sh` lê o **ângulo e o vento** de `dataset/${ANGLE_WIND_SOURCE:-moead}/<inst>/<run>/log.txt`. Assim, todos os algoritmos usam o mesmo cenário de vento por (instância, run), sorteado originalmente pelo MOEA/D. Se o log não existir, ângulo e vento ficam **0.0** (potência zero).
+- `batch.sh` roda `create_folders.sh` e dispara **52 processos em background** com `nohup`: um para A–J + 0, cinquenta lotes de 10 instâncias (1–500) e um para 501–505. Os logs vão para `scripts/logs/batch_*.txt`, e a pasta `logs/` precisa existir.
+- `main.sh` roda **20 execuções** de cada instância do lote, chamando `smaller_scripts/moead.sh <instância> <run>`, e acrescenta a saída a `logs/<instância>.txt`.
+- `moead.sh` executa `./exe/moead <instância> ../dataset/moead/<instância>/<run>/` e grava a saída, com o tempo (`time`), em `log.txt` na mesma pasta.
+- `create_folders.sh` cria `dataset/moead/{A..J,0..505}/{1..20}/`, mas não faz nada se `dataset/moead` já existir. Como `moead.sh` faz `mkdir -p`, isso não impede a execução.
 
 ### 3.5 Saídas
 
-Em `<pasta_saida>/`:
+Em `dataset/moead/<inst>/<run>/`:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `log.txt` | Parâmetros, nº de turbinas, vento/ângulo e tempo (`time`) |
-| `infoRun.txt` | Por geração: avaliações acumuladas, tamanho do arquivo Pareto e se a busca local rodou |
-| `<inst>_<algoritmo>_<N>.txt` | Arquivo Pareto a cada 100.000 avaliações (`N = 100000, …, 1000000`). Cada linha: `custo potência` (custo em valor absoluto) |
+| `log.txt` | Escrito pelo `moead.sh`: instância, run, nº de subproblemas, vizinhos, turbinas fixas e móveis, vento, ângulo e tempo (`time`) |
+| `infoRun.txt` | Por geração: avaliações acumuladas e tamanho do arquivo Pareto |
+| `<inst>_moead_<N>.txt` | Arquivo Pareto a cada 100.000 avaliações (`N = 100000, …, 1000000`). Cada linha: `custo potência` (custo em valor absoluto) |
+| `<inst>_moead_layout.txt` | Gerado na avaliação 1.000.000: coordenadas `x y` das turbinas móveis de cada solução do arquivo, com uma linha em branco entre soluções |
+
+**Resultados versionados:** `dataset/moead/` tem as 20 execuções das instâncias A, 172, 240 e 456. Eles foram gerados por uma versão anterior, que **sorteava o vento da rosa dos ventos** (ex.: A/run 1 → 13 m/s, 330°), e não são comparáveis com execuções do código atual, que usa 10 m/s e 30°. Rodar o lote sobrescreve esses arquivos.
 
 ---
 
 ## 4. Modelagem do parque eólico
 
-Código: [generate_rSolution.cpp](src/comolsd/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp), [instance_info.cpp](src/comolsd/instance_info.cpp), [headers/wind_farm_entities/](src/comolsd/headers/wind_farm_entities/).
+Código: [generate_rSolution.cpp](src/moead/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp), [instance_info.cpp](src/moead/instance_info.cpp), [headers/wind_farm_entities/](src/moead/headers/wind_farm_entities/).
 
 ### 4.1 Instâncias: zonas e turbinas fixas
 
@@ -225,7 +230,7 @@ Uma instância descreve um sítio offshore com **até 3 zonas**. As coordenadas 
 
 *Instância 10: duas zonas disponíveis (contorno magenta, cor = profundidade em m) e o parque fixo (pontos laranja).*
 
-**Como uma zona é construída** (gerador [script.py](src/comolsd/src/instance_generation/script.py) e [gen_layout.py](src/comolsd/src/instance_generation/gen_layout.py)):
+**Como uma zona é construída** (gerador [script.py](src/moead/src/instance_generation/script.py) e [gen_layout.py](src/moead/src/instance_generation/gen_layout.py)):
 
 1. **Polígono**: de 3 a 9 vértices aleatórios, escalado para ter entre 20 e 550 km² (a soma das zonas fica entre 100 e 1500 km²). Zonas que se sobrepõem são reposicionadas. O contorno vai para `geometry.txt`.
 2. **Áreas proibidas**: de 2 a 5 **buracos** (polígonos convexos dentro da zona) e **estruturas** (faixas que cortam a zona a partir da borda, como cabos ou dutos), num total de 5 a 8 recortes. Na figura, são as reentrâncias e os buracos brancos.
@@ -242,7 +247,7 @@ Uma instância descreve um sítio offshore com **até 3 zonas**. As coordenadas 
 | `10` | 11.182 fundações, 63 turbinas | 8.335 fundações, 82 turbinas | 64 |
 | `A` | 50,4 km², 2 buracos, 2.187 fundações, 26 turbinas | 26,8 km², 4 buracos, 1.009 fundações, 8 turbinas | 42 |
 
-As instâncias A–J têm um `info.json` com área, número de buracos e opções de quantidade de turbinas para densidades de potência de 4, 6 e 8 MW/km² (ex.: zona 1 de A: 13, 20 ou 26 turbinas de 15 MW). As quantidades usadas estão fixas em `turbines_instace` ([instance_info.cpp](src/comolsd/instance_info.cpp#L26)).
+As instâncias A–J têm um `info.json` com área, número de buracos e opções de quantidade de turbinas para densidades de potência de 4, 6 e 8 MW/km² (ex.: zona 1 de A: 13, 20 ou 26 turbinas de 15 MW). As quantidades usadas estão fixas em `turbines_instace` ([instance_info.cpp](src/moead/instance_info.cpp#L26)).
 
 **Como o código usa esses dados**
 
@@ -256,7 +261,7 @@ As instâncias A–J têm um `info.json` com área, número de buracos e opçõe
 - **Turbinas móveis**: as que o algoritmo posiciona. Modelo NREL 15 MW: diâmetro 240 m, altura do cubo 150 m, curva `wtg/NREL-15-240.txt`.
 - **Turbinas fixas** (`fixd`): modelo NREL 10 MW: diâmetro 179 m, altura 119 m, curva `wtg/NREL-10-179.txt`.
 - **Curvas** (`vento potência Ct`): para a velocidade do vento livre `U`, o código lê a potência (`P_curva`, em MW) e o coeficiente de empuxo `Ct` de cada modelo. Se `U` não estiver na tabela, usa a média entre as linhas vizinhas. Esses valores são os mesmos para todas as turbinas do mesmo modelo, pois são lidos com o vento livre, antes do wake.
-- **Vento**: um único cenário por execução, com velocidade `wind` (m/s) e direção `angle` (graus; o vetor do vento é `(cos θ, sin θ)`). Os dois vêm da linha de comando. Os arquivos `wind/RVO_*.txt` (rosas dos ventos de sítios offshore holandeses, ex.: HKN = Hollandse Kust Noord) têm a distribuição `ângulo velocidade probabilidade`, mas a leitura deles está comentada em `instance_info.cpp`. Nos experimentos, cada (instância, run) reaproveita o cenário salvo em `dataset/moead/<inst>/<run>/log.txt` (ex.: A/run 1 → vento 13 m/s, ângulo 330°).
+- **Vento**: um único cenário por execução, com velocidade `wind` (m/s) e direção `angle` (graus; o vetor do vento é `(cos θ, sin θ)`). Vem da linha de comando ou dos valores padrão, **10 m/s e 30°**, que são os usados pelo `moead.sh`. Os arquivos `wind/RVO_*.txt` (rosas dos ventos de sítios offshore holandeses, ex.: HKN = Hollandse Kust Noord) têm a distribuição `ângulo velocidade probabilidade`, mas o sorteio a partir deles está comentado em `instance_info.cpp`.
 
 ### 4.3 Solução
 
@@ -300,7 +305,7 @@ P_i = 0.6127 · P_curva · v_i³
 
 ### 4.6 Efeito esteira (wake effect)
 
-Modelo do tipo Jensen/Park ([calculate_interference](src/comolsd/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp#L46)). Para a turbina *a* gerando esteira sobre a turbina *b*:
+Modelo do tipo Jensen/Park ([calculate_interference](src/moead/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp#L46)). Para a turbina *a* gerando esteira sobre a turbina *b*:
 
 1. **Está a jusante?** Projeta o vetor `b − a` na direção do vento `(cos θ, sin θ)`. Se a projeção `s ≤ 0`, *b* está atrás de *a* em relação ao vento → sem interferência.
 2. **Coeficiente de decaimento**: `α = 0.5 / ln(h_a / z0)`, com `z0 = 0.0005` (rugosidade offshore).
@@ -320,20 +325,19 @@ A potência total exige comparar todos os pares de turbinas: custo O((n + F)²) 
 
 ### 4.7 Orçamento de avaliações
 
-- **Máximo**: `stop_criteria = 1.000.000` avaliações ([main.cpp](src/comolsd/main.cpp#L12)). O contador global é `countRevalue`.
-- **O que conta como 1 avaliação**: cada chamada de `calculate_cost` + `calculate_power` sobre uma nova solução, isto é, cada solução da população inicial, cada filho de crossover, cada mutação e cada vizinho gerado na busca local.
-- **Como é gasto no MOEA/D**:
+- **Máximo**: `stop_criteria = 1.000.000` avaliações ([main.cpp](src/moead/main.cpp#L11)). O contador global é `countRevalue`.
+- **O que conta como 1 avaliação**: cada chamada de `calculate_cost` + `calculate_power` sobre uma nova solução, isto é, cada solução da população inicial, cada filho de crossover e cada mutação.
+- **Como é gasto**:
   - 100 avaliações na população inicial;
-  - por subproblema: 0, 2 ou 4 avaliações (crossover com prob. 0.5 gera 2 filhos; mutação com prob. 0.5 muta os 2) → em média **~200 avaliações por geração**, ou seja, cerca de **5.000 gerações** sem busca local;
-  - busca local: até 163 avaliações por solução explorada (+ re-sorteios quando um vizinho repetido é gerado). No Anytime-PLS, a fase 1 devolve 162 avaliações ao contador por solução explorada (conta só 1).
-- **Parada**: o laço do MOEA/D só verifica o critério no início de cada geração, então pode ultrapassar 1.000.000 em até ~400 avaliações. As buscas locais verificam a cada solução explorada.
-- **Snapshots**: a cada 100.000 avaliações o arquivo Pareto é salvo em disco.
+  - por subproblema: 0, 2 ou 4 avaliações (crossover com prob. 0.5 gera 2 filhos; mutação com prob. 0.5 muta os 2) → em média **~200 avaliações por geração**, ou seja, cerca de **5.000 gerações**.
+- **Parada**: o laço só verifica o critério no início de cada geração, então pode ultrapassar 1.000.000 em até ~400 avaliações.
+- **Snapshots**: a cada 100.000 avaliações o arquivo Pareto é salvo em disco; na avaliação 1.000.000 também é salvo o layout.
 
 ---
 
 ## 5. Operadores genéticos
 
-Arquivos: [crossover.cpp](src/comolsd/src/global_modules/genetic_operators/crossover/crossover.cpp) e [mutation.cpp](src/comolsd/src/global_modules/genetic_operators/mutation/mutation.cpp). Ambos avaliam a solução gerada, inserem no arquivo Pareto global e incrementam o contador de avaliações.
+Arquivos: [crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/crossover.cpp) e [mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/mutation.cpp). Ambos avaliam a solução gerada, inserem no arquivo Pareto global e incrementam o contador de avaliações.
 
 **Crossover (um ponto por zona, com reparo)** — para cada zona:
 1. Sorteia um ponto de corte `c` sobre o vetor de fundações.
@@ -352,40 +356,54 @@ O resultado sempre tem o número correto de turbinas por zona. O MOEA/D gera doi
 
 | Parâmetro | Valor | Onde |
 |---|---|---|
-| Nº de subproblemas / tamanho da população (N) | 100 | [globals.h](src/comolsd/headers/globals.h) `SIZE_OF_POPULATION` |
-| Tamanho da vizinhança (T) | 10 | [moead_hybrid.cpp:39](src/comolsd/src/metaheuristics/moead/moead_hybrid.cpp#L39) |
-| Probabilidade de crossover | 0.5 | [moead_hybrid.cpp:37](src/comolsd/src/metaheuristics/moead/moead_hybrid.cpp#L37) |
-| Probabilidade de mutação | 0.5 (um sorteio para os dois filhos) | [moead_hybrid.cpp:38](src/comolsd/src/metaheuristics/moead/moead_hybrid.cpp#L38) |
+| Nº de subproblemas / tamanho da população (N) | 100 | [globals.h](src/moead/headers/globals.h) `SIZE_OF_POPULATION` |
+| Tamanho da vizinhança (T) | 10 | [moead.cpp:36](src/moead/src/metaheuristics/moead/moead.cpp#L36) |
+| Probabilidade de crossover | 0.5 | [moead.cpp:34](src/moead/src/metaheuristics/moead/moead.cpp#L34) |
+| Probabilidade de mutação | 0.5 (um sorteio para os dois filhos) | [moead.cpp:35](src/moead/src/metaheuristics/moead/moead.cpp#L35) |
 | Vetores de peso | Uniformes, `λᵢ = (i/(N−1), 1 − i/(N−1))` | `build_weight_vector` |
 | Função de agregação | Tchebycheff, sem normalização | `calculate_gte` |
 | Ponto de referência z* | Máximo de cada objetivo no arquivo Pareto, atualizado a cada subproblema | Step 2.3 |
 | Seleção de pais | Apenas da vizinhança B(i) (sem cruzamento global) | Step 2.1 |
 | Substituição | Todos os vizinhos em que o filho é melhor ou igual (sem limite `nr`) | Step 2.4 |
-| Orçamento | 1.000.000 avaliações | [main.cpp:12](src/comolsd/main.cpp#L12) |
-| Tamanho máximo do arquivo Pareto | 300 | [BoundedParetoSet.h](src/comolsd/headers/adaptative_grid/BoundedParetoSet.h) `MAXARCSIZE` |
-| Profundidade do grid adaptativo | 5 bits por objetivo (32×32 células) | [param.h](src/comolsd/headers/adaptative_grid/param.h) |
-| Tamanho da vizinhança da busca local | 163 vizinhos | `pareto_ls.cpp`, `anytime_pls.cpp` |
-| Probabilidade de busca local por geração | `avaliações / 1.000.000` (cresce de 0 a 1) | [moead_hybrid.cpp:160](src/comolsd/src/metaheuristics/moead/moead_hybrid.cpp#L160) |
+| Orçamento | 1.000.000 avaliações | [main.cpp:11](src/moead/main.cpp#L11) |
+| Tamanho máximo do arquivo Pareto | 300 | [BoundedParetoSet.h](src/moead/headers/adaptative_grid/BoundedParetoSet.h) `MAXARCSIZE` |
+| Profundidade do grid adaptativo | 5 bits por objetivo (32×32 células) | [param.h](src/moead/headers/adaptative_grid/param.h) |
+| Vento / ângulo | 10 m/s / 30° (padrão, usado pelo `moead.sh`) | [instance_info.cpp](src/moead/instance_info.cpp#L20) |
 | Execuções por instância | 20 | `scripts/main.sh` |
-| Semente | `time(nullptr)` / `random_device` (não reprodutível) | `instance_info.cpp`, `moead_hybrid.cpp` |
+| Semente | `time(nullptr)` / `random_device` (não reprodutível) | `instance_info.cpp`, `moead.cpp` |
 
 ---
 
 ## 7. Problemas conhecidos
 
-Pontos encontrados na leitura do código, importantes para futuras alterações:
+Pontos encontrados na leitura do código, do mais grave para o menos grave:
 
-1. **`LS=none` corrompe o arquivo Pareto.** A busca local `none` devolve os próprios ponteiros do arquivo global, e o `moead_hybrid` dá `delete` neles ([moead_hybrid.cpp:150](src/comolsd/src/metaheuristics/moead/moead_hybrid.cpp#L150)). Para rodar o MOEA/D "puro", corrija o `none` para devolver cópias ou chame `moead()`.
-2. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/comolsd/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso). Uma solução que melhora só a potência, com custo igual, não é considerada dominante.
-3. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes, o que distorce a distribuição efetiva dos pesos.
-4. **Caminhos nos scripts**: `"$ALGO_$LS"` em `create_folders.sh` e `run.sh` é lido pelo bash como a variável `$ALGO_` (vazia), então a saída vai para `dataset/<LS>/` e não para `dataset/<ALGO>_<LS>/`. O correto é `"${ALGO}_${LS}"`. A pasta `scripts/logs/<ALGO>/` também precisa existir antes do `batch.sh`.
-5. **Vento zero**: se `dataset/moead/<inst>/<run>/log.txt` não existir, `run.sh` passa ângulo e vento 0. O dataset versionado só tem as instâncias A, 172, 240 e 456.
-6. **Arquivo de layout nunca é gerado**: `printAllSolutionsLayout` só é chamado dentro da população inicial, quando o orçamento nunca está esgotado.
-7. **Anytime-PLS**: `if(p->adicionarSol(...));{ break; }` ([anytime_pls.cpp:33](src/comolsd/src/global_modules/local_search/anytime_pls.cpp#L33)) tem um `;` extra e sempre sai do laço.
-8. `ls_prob = 1 / stop_criteria` é divisão inteira (= 0) na primeira geração.
-9. `tch_vector` e `updateEP` são calculados ou declarados, mas não usados.
-10. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
-11. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior — só afeta ventos que não estão exatamente na tabela.
+**Impedem ou invalidam os experimentos**
+
+1. **`makeall.sh` falha.** O [Makefile](src/moead/Makefile) gera `nsga2` (`OUTPUT = nsga2`), mas o `makeall.sh` move `moead`. A compilação funciona, o `mv` falha e `scripts/exe/moead`, que o `moead.sh` chama, não é criado. Corrigir com `OUTPUT = moead`. Além disso, os scripts estão versionados sem permissão de execução (modo 100644): `./makeall.sh` precisa virar `bash makeall.sh`, e como o script para antes dos `chmod`, o `nohup ./main.sh` do `batch.sh` falha com *Permission denied*.
+2. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados versionados em `dataset/moead/`, que têm ventos sorteados.
+3. **`scripts/logs/` não existe.** O `batch.sh` redireciona para `./logs/batch_*.txt`. Sem a pasta, o redirecionamento falha e nenhum lote é executado.
+
+**Afetam a qualidade ou a validade dos resultados**
+
+4. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
+5. **Rodar o lote sobrescreve `dataset/moead/`** (A, 172, 240, 456), inclusive o `log.txt` com o vento original. Pelo mesmo motivo, o `create_folders.sh` não faz nada, porque a pasta já existe.
+6. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso). Uma solução que melhora só a potência, com custo igual, não é considerada dominante.
+7. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
+
+**Menores**
+
+8. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
+9. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
+10. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
+11. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
+12. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
+13. `src/instance_generation/__pycache__/*.pyc` está versionado.
+
+**Desvios do MOEA/D original** (não são bugs, mas valem registro)
+
+- B(i) exclui o próprio i; no artigo original, i faz parte da própria vizinhança.
+- Não há limite `nr` de substituições: fiel ao MOEA/D de 2007, mas reduz a diversidade (um bom filho pode virar 10 cópias).
 
 ---
 
