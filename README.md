@@ -123,13 +123,6 @@ Variável global `BoundedParetoSet * pareto` declarada em [main.cpp](src/moead/m
 
 Roda `make rebuild` em `src/moead` (g++ com `-std=c++17 -Werror -O2`), move o executável para `scripts/exe/moead` e dá permissão de execução aos scripts.
 
-> **Atenção:** o `Makefile` gera um executável chamado `nsga2` (`OUTPUT = nsga2`), mas o `makeall.sh` procura `moead`, então o script para com erro no `mv`. Até corrigir, compile à mão:
->
-> ```bash
-> make -C src/moead rebuild && mkdir -p scripts/exe && mv src/moead/nsga2 scripts/exe/moead
-> chmod +x makeall.sh scripts/*.sh scripts/smaller_scripts/*.sh
-> ```
-
 ### 3.2 Estrutura de instâncias esperada
 
 As instâncias ficam no repositório [MO_WFLOP-archive/instances](https://github.com/gustavojorge/MO_WFLOP-archive/tree/main/instances) e não são versionadas aqui.
@@ -191,11 +184,10 @@ O `moead.sh` passa só os dois primeiros argumentos, então os experimentos em l
 
 ```bash
 cd scripts
-mkdir -p logs
 ./batch.sh
 ```
 
-- `batch.sh` roda `create_folders.sh` e dispara **52 processos em background** com `nohup`: um para A–J + 0, cinquenta lotes de 10 instâncias (1–500) e um para 501–505. Os logs vão para `scripts/logs/batch_*.txt`, e a pasta `logs/` precisa existir.
+- `batch.sh` roda `create_folders.sh`, cria `scripts/logs/` e dispara **52 processos em background** com `nohup`: um para A–J + 0, cinquenta lotes de 10 instâncias (1–500) e um para 501–505. Os logs vão para `scripts/logs/batch_*.txt`.
 - `main.sh` roda **20 execuções** de cada instância do lote, chamando `smaller_scripts/moead.sh <instância> <run>`, e acrescenta a saída a `logs/<instância>.txt`.
 - `moead.sh` executa `./exe/moead <instância> ../dataset/moead/<instância>/<run>/` e grava a saída, com o tempo (`time`), em `log.txt` na mesma pasta.
 - `create_folders.sh` cria `dataset/moead/{A..J,0..505}/{1..20}/`, mas não faz nada se `dataset/moead` já existir. Como `moead.sh` faz `mkdir -p`, isso não impede a execução.
@@ -378,27 +370,25 @@ O resultado sempre tem o número correto de turbinas por zona. O MOEA/D gera doi
 
 Pontos encontrados na leitura do código, do mais grave para o menos grave:
 
-**Impedem ou invalidam os experimentos**
+**Invalidam a comparação dos experimentos**
 
-1. **`makeall.sh` falha.** O [Makefile](src/moead/Makefile) gera `nsga2` (`OUTPUT = nsga2`), mas o `makeall.sh` move `moead`. A compilação funciona, o `mv` falha e `scripts/exe/moead`, que o `moead.sh` chama, não é criado. Corrigir com `OUTPUT = moead`. Além disso, os scripts estão versionados sem permissão de execução (modo 100644): `./makeall.sh` precisa virar `bash makeall.sh`, e como o script para antes dos `chmod`, o `nohup ./main.sh` do `batch.sh` falha com *Permission denied*.
-2. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados versionados em `dataset/moead/`, que têm ventos sorteados.
-3. **`scripts/logs/` não existe.** O `batch.sh` redireciona para `./logs/batch_*.txt`. Sem a pasta, o redirecionamento falha e nenhum lote é executado.
+1. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados versionados em `dataset/moead/`, que têm ventos sorteados.
 
 **Afetam a qualidade ou a validade dos resultados**
 
-4. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
-5. **Rodar o lote sobrescreve `dataset/moead/`** (A, 172, 240, 456), inclusive o `log.txt` com o vento original. Pelo mesmo motivo, o `create_folders.sh` não faz nada, porque a pasta já existe.
-6. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso). Uma solução que melhora só a potência, com custo igual, não é considerada dominante.
-7. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
+2. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
+3. **Rodar o lote sobrescreve `dataset/moead/`** (A, 172, 240, 456), inclusive o `log.txt` com o vento original. Pelo mesmo motivo, o `create_folders.sh` não faz nada, porque a pasta já existe.
+4. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso). Uma solução que melhora só a potência, com custo igual, não é considerada dominante.
+5. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
 
 **Menores**
 
-8. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
-9. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
-10. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
-11. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
-12. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
-13. `src/instance_generation/__pycache__/*.pyc` está versionado.
+6. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
+7. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
+8. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
+9. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
+10. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
+11. `src/instance_generation/__pycache__/*.pyc` está versionado.
 
 **Desvios do MOEA/D original** (não são bugs, mas valem registro)
 

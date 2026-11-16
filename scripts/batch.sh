@@ -6,6 +6,8 @@ create_folders="./smaller_scripts/create_folders.sh"
 echo "Running script 1 = create_folders.sh"
 bash "$create_folders"
 
+mkdir -p ./logs
+
 nohup "$script" A B C D E F G H I J 0 &> "./logs/batch_A_to_J_plus_0.txt" &
 
 start=1

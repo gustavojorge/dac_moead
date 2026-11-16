@@ -45,7 +45,7 @@ SRC_FILES = \
 
 MAIN_FILE = main.cpp
 
-OUTPUT = nsga2
+OUTPUT = moead
 
 $(OUTPUT): $(SRC_FILES) $(MAIN_FILE)
 	@echo Starting compilation of $(OUTPUT)...

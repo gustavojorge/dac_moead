@@ -9,13 +9,12 @@ MOEA/D em C++17 para o WFLOP biobjetivo: posicionar turbinas eólicas offshore e
 ## Comandos
 
 ```bash
-make -C src/moead rebuild && mkdir -p scripts/exe && mv src/moead/nsga2 scripts/exe/moead
-chmod +x makeall.sh scripts/*.sh scripts/smaller_scripts/*.sh
-bash makeall.sh                                # hoje falha: o Makefile gera "nsga2", o script move "moead"
+./makeall.sh                                   # make rebuild em src/moead → scripts/exe/moead
+make -C src/moead rebuild                      # só compila (gera src/moead/moead)
 
 cd scripts
 ./exe/moead <inst> <saida/> [<angulo> <vento>] # padrão: 30° e 10 m/s
-mkdir -p logs && ./batch.sh                    # 52 processos nohup, 20 runs por instância
+./batch.sh                                     # 52 processos nohup, 20 runs por instância
 ```
 
 Não há testes automatizados. Para validar uma mudança, compile e rode uma instância pequena (ex.: `A`) com orçamento reduzido.
@@ -54,9 +53,7 @@ Os arquivos precisam terminar com quebra de linha: o loader faz `pop_back()` da 
 
 ## Armadilhas conhecidas
 
-- `makeall.sh` quebra: `OUTPUT = nsga2` no `Makefile`, mas o script move `moead`. Os `.sh` estão versionados sem bit de execução (100644).
 - Vento fixo em 10 m/s e 30°: `moead.sh` passa só 2 argumentos e o sorteio da rosa dos ventos está comentado. Os resultados versionados em `dataset/moead/` (A, 172, 240, 456) usaram vento sorteado e são sobrescritos ao rodar o lote.
-- `scripts/logs/` precisa existir antes do `batch.sh`.
 - Tchebycheff sem normalização (custo ~10⁷ vs potência ~10⁶).
 - `dominatesP` em `ParetoSet.cpp` tem typo (`s2.fitness.second > s2.fitness.second`).
 - Sementes não reprodutíveis (`srand(time(nullptr))`, `random_device`).
