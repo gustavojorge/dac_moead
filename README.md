@@ -266,7 +266,7 @@ struct Solution {
 };
 ```
 
-Os ids das turbinas móveis começam em `fixd.size()`, para não colidir com os ids das fixas (0..F−1) nem com o 0 usado como "vazio".
+Os ids das turbinas móveis começam em `fixd.size()`, para não colidir com os ids das fixas (0..F−1) nem com o 0 usado como "vazio". Os ids precisam ser únicos na solução, porque o wake ignora pares com o mesmo id. Hoje o crossover quebra essa regra (ver [problema 1](#7-problemas-conhecidos)).
 
 A solução inicial é aleatória: para cada zona, sorteia `turbines_per_zone[z]` fundações distintas.
 
@@ -371,24 +371,32 @@ O resultado sempre tem o número correto de turbinas por zona. O MOEA/D gera doi
 
 Pontos encontrados na leitura do código, do mais grave para o menos grave:
 
+**Erram o cálculo dos objetivos**
+
+1. **Ids de turbina repetidos entre zonas superestimam a potência.** O crossover reinicia o contador de ids em cada zona (`int id_new = fixd.size();` dentro de `crossoverAux`, [crossover.cpp:41](src/moead/src/global_modules/genetic_operators/crossover/crossover.cpp#L41)), então turbinas de zonas diferentes recebem os mesmos ids. O `calculate_interference` trata ids iguais como a mesma turbina e devolve 0 ([generate_rSolution.cpp:49](src/moead/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp#L49)), e o wake entre essas turbinas é ignorado.
+   - Afeta toda instância com mais de uma zona, a partir do primeiro crossover: todo filho tem ids repetidos, e a mutação mantém os ids que recebeu.
+   - O mesmo layout passa a ter potências diferentes, conforme a ordem dos ids. Num teste com a instância A (2 zonas, 34 turbinas), 200 de 200 filhos tinham só 26 ids distintos, e 33 de 200 cópias do layout do pai saíram com potência maior (ex.: 386.025,6 → 386.071,5).
+   - Nos resultados de referência, os empates de custo (o mesmo layout guardado com potências diferentes) aparecem quase só nas instâncias de 2 zonas: A tem 15 e 172 tem 189, contra 1 em 240 e 1 em 456, que têm uma zona.
+   - Correção: numerar as turbinas do filho com um contador único para todas as zonas (por exemplo, declarar `id_new` em `crossover` e passá-lo por referência a `crossoverAux`).
+
 **Invalidam a comparação dos experimentos**
 
-1. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados de referência em `dataset/reference/moead/`, que têm ventos sorteados.
+2. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados de referência em `dataset/reference/moead/`, que têm ventos sorteados.
 
 **Afetam a qualidade ou a validade dos resultados**
 
-2. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
-3. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso). Uma solução que melhora só a potência, com custo igual, não é considerada dominante.
-4. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
+3. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
+4. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso); a função `dominates` de [dominates.cpp](src/moead/src/global_modules/dominates.cpp) tem a versão correta (`solutionA.fitness.second > solutionB.fitness.second`). Uma solução com custo igual e potência maior não é considerada dominante, e o arquivo Pareto guarda as duas. Com o problema 1, isso acontece com cópias do mesmo layout: os arquivos finais de referência têm 284 soluções dominadas por outra de mesmo custo, em 22.650.
+5. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
 
 **Menores**
 
-5. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
-6. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
-7. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
-8. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
-9. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
-10. `src/instance_generation/__pycache__/*.pyc` está versionado.
+6. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
+7. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
+8. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
+9. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
+10. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
+11. `src/instance_generation/__pycache__/*.pyc` está versionado.
 
 **Desvios do MOEA/D original** (não são bugs, mas valem registro)
 

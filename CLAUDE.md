@@ -46,12 +46,14 @@ Os arquivos precisam terminar com quebra de linha: o loader faz `pop_back()` da 
 ## Invariantes que precisam ser mantidas
 
 - **Contagem de avaliações**: quem avalia uma solução (`calculate_cost` + `calculate_power`) também deve chamar `pareto->adicionarSol`, incrementar `countRevalue`, salvar o snapshot quando `countRevalue % 100000 == 0` e o layout quando `countRevalue >= stop_criteria`. Hoje isso está duplicado em `population.cpp`, `crossover.cpp` e `mutation.cpp`.
-- **Representação**: `grid[z][p]` guarda o id da turbina ou `0` (vazio); `turbines[z][k].index` aponta para a fundação `p`. Os dois precisam ficar consistentes. Ids das móveis começam em `fixd.size()`.
+- **Representação**: `grid[z][p]` guarda o id da turbina ou `0` (vazio); `turbines[z][k].index` aponta para a fundação `p`. Os dois precisam ficar consistentes. Ids das móveis começam em `fixd.size()` e precisam ser únicos na solução (o wake ignora pares com o mesmo id).
 - **Viabilidade por construção**: número exato de turbinas por zona, uma turbina por fundação, sem troca de zona. Novos operadores precisam preservar isso (não há penalização).
 - **Sentido dos objetivos**: tudo é maximização; z* é o máximo e as saídas escrevem `abs(custo)`.
 - **Memória**: soluções são `new`/`delete` manuais. `ParetoSet::adicionarSol` copia a solução recebida e o arquivo é dono das cópias. `population` é `vector<Solution>` (valores): substituir um vizinho copia o filho.
 
 ## Armadilhas conhecidas
+
+- O crossover reinicia `id_new = fixd.size()` em cada zona, gerando ids repetidos entre zonas; `calculate_interference` devolve 0 para ids iguais, então a potência é superestimada em instâncias com mais de uma zona.
 
 - Vento fixo em 10 m/s e 30°: `moead.sh` passa só 2 argumentos e o sorteio da rosa dos ventos está comentado. Os resultados de referência em `dataset/reference/moead/` (A, 172, 240, 456) usaram vento sorteado.
 - Tchebycheff sem normalização (custo ~10⁷ vs potência ~10⁶).
