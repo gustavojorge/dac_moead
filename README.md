@@ -266,7 +266,7 @@ struct Solution {
 };
 ```
 
-Os ids das turbinas móveis começam em `fixd.size()`, para não colidir com os ids das fixas (0..F−1) nem com o 0 usado como "vazio". Os ids precisam ser únicos na solução, porque o wake ignora pares com o mesmo id. Hoje o crossover quebra essa regra (ver [problema 1](#7-problemas-conhecidos)).
+Os ids das turbinas móveis começam em `fixd.size()`, para não colidir com os ids das fixas (0..F−1) nem com o 0 usado como "vazio". Os ids precisam ser únicos na solução, porque o wake ignora pares com o mesmo id.
 
 A solução inicial é aleatória: para cada zona, sorteia `turbines_per_zone[z]` fundações distintas.
 
@@ -375,55 +375,48 @@ Pontos encontrados na leitura do código, do mais grave para o menos grave.
 
 | # | Problema | Categoria | Status |
 |---|---|---|---|
-| 1 | Ids de turbina repetidos entre zonas superestimam a potência | Erram os objetivos | ❌ Aberto |
-| 2 | Vento fixo em 10 m/s e 30° | Invalidam a comparação | ❌ Aberto |
-| 3 | Tchebycheff sem normalização | Qualidade dos resultados | ❌ Aberto |
-| 4 | Sementes não reprodutíveis | Qualidade dos resultados | ❌ Aberto |
-| 5 | Laço infinito da mutação em zona sem fundação livre | Menor | ❌ Aberto |
-| 6 | Interpolação da curva da turbina fixa usa `power` | Menor | ❌ Aberto |
-| 7 | Orçamento ultrapassado em até ~400 avaliações | Menor | ❌ Aberto |
-| 8 | Código morto (`tch_vector`, `updateEP`, `nsga2.cpp`) | Menor | ❌ Aberto |
-| 9 | `cout << argc` no topo do `log.txt` | Menor | ❌ Aberto |
-| 10 | `__pycache__/*.pyc` versionado | Menor | ❌ Aberto |
+| 1 | Vento fixo em 10 m/s e 30° | Invalidam a comparação | ❌ Aberto |
+| 2 | Tchebycheff sem normalização | Qualidade dos resultados | ❌ Aberto |
+| 3 | Sementes não reprodutíveis | Qualidade dos resultados | ❌ Aberto |
+| 4 | Laço infinito da mutação em zona sem fundação livre | Menor | ❌ Aberto |
+| 5 | Interpolação da curva da turbina fixa usa `power` | Menor | ❌ Aberto |
+| 6 | Orçamento ultrapassado em até ~400 avaliações | Menor | ❌ Aberto |
+| 7 | Código morto (`tch_vector`, `updateEP`, `nsga2.cpp`) | Menor | ❌ Aberto |
+| 8 | `cout << argc` no topo do `log.txt` | Menor | ❌ Aberto |
+| 9 | `__pycache__/*.pyc` versionado | Menor | ❌ Aberto |
 | C1 | `makeall.sh` falhava (binário `nsga2`) e os `.sh` estavam sem permissão de execução | Impediam os experimentos | ✅ Corrigido (`02a50f2fc`) |
 | C2 | `scripts/logs/` não existia e nenhum lote rodava | Impediam os experimentos | ✅ Corrigido (`02a50f2fc`) |
 | C3 | Rodar o lote sobrescrevia os resultados de referência em `dataset/moead/` | Qualidade dos resultados | ✅ Corrigido (`de4bb2b85`) |
 | C4 | Typo na dominância (`s2.fitness.second > s2.fitness.second`) | Qualidade dos resultados | ✅ Corrigido (`4a774c913`) |
+| C5 | Ids de turbina repetidos entre zonas superestimavam a potência | Erravam os objetivos | ✅ Corrigido (`ae245d2c0`) |
 
 ### 7.2 Problemas abertos
 
-**Erram o cálculo dos objetivos**
-
-1. **Ids de turbina repetidos entre zonas superestimam a potência.** O crossover reinicia o contador de ids em cada zona (`int id_new = fixd.size();` dentro de `crossoverAux`, [crossover.cpp:41](src/moead/src/global_modules/genetic_operators/crossover/crossover.cpp#L41)), então turbinas de zonas diferentes recebem os mesmos ids. O `calculate_interference` trata ids iguais como a mesma turbina e devolve 0 ([generate_rSolution.cpp:49](src/moead/src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp#L49)), e o wake entre essas turbinas é ignorado.
-   - Afeta toda instância com mais de uma zona, a partir do primeiro crossover: todo filho tem ids repetidos, e a mutação mantém os ids que recebeu.
-   - O mesmo layout passa a ter potências diferentes, conforme a ordem dos ids. Num teste com a instância A (2 zonas, 34 turbinas), 200 de 200 filhos tinham só 26 ids distintos, e 33 de 200 cópias do layout do pai saíram com potência maior (ex.: 386.025,6 → 386.071,5).
-   - Nos resultados de referência, os empates de custo (o mesmo layout guardado com potências diferentes) aparecem quase só nas instâncias de 2 zonas: A tem 15 e 172 tem 189, contra 1 em 240 e 1 em 456, que têm uma zona.
-   - Correção: numerar as turbinas do filho com um contador único para todas as zonas (por exemplo, declarar `id_new` em `crossover` e passá-lo por referência a `crossoverAux`).
-
 **Invalidam a comparação dos experimentos**
 
-2. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados de referência em `dataset/reference/moead/`, que têm ventos sorteados.
+1. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados de referência em `dataset/reference/moead/`, que têm ventos sorteados.
 
 **Afetam a qualidade ou a validade dos resultados**
 
-3. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
-4. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
+2. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
+3. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
 
 **Menores**
 
-5. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
-6. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
-7. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
-8. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
-9. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
-10. `src/instance_generation/__pycache__/*.pyc` está versionado.
+4. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
+5. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
+6. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
+7. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
+8. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
+9. `src/instance_generation/__pycache__/*.pyc` está versionado.
 
 ### 7.3 Problemas corrigidos
 
 - **C1. Build** (`02a50f2fc`): o `Makefile` gerava `nsga2`, mas o `makeall.sh` movia `moead`, e o `mv` falhava. Os `.sh` estavam versionados com modo 100644, então o `nohup ./main.sh` falhava com *Permission denied*. Agora `OUTPUT = moead` e os scripts têm bit de execução.
 - **C2. Pasta de logs** (`02a50f2fc`): o `batch.sh` redirecionava para `./logs/batch_*.txt` sem a pasta existir, e nenhum lote rodava. Agora ele faz `mkdir -p ./logs`.
 - **C3. Sobrescrita dos resultados de referência** (`de4bb2b85`): os resultados de A, 172, 240 e 456 ficavam em `dataset/moead/`, a mesma pasta em que o lote grava, e o `create_folders.sh` não criava nada porque a pasta já existia. Agora eles ficam em `dataset/reference/moead/`.
-- **C4. Typo na dominância** (`4a774c913`): `dominatesP` comparava `s2.fitness.second > s2.fitness.second`, sempre falso, e o arquivo Pareto guardava soluções dominadas de mesmo custo (284 nos arquivos finais de referência). Agora compara `s1.fitness.second > s2.fitness.second`, como a função `dominates` de `dominates.cpp`. Os empates de custo continuam surgindo por causa do problema 1, mas o arquivo passa a manter só a cópia de maior potência.
+- **C4. Typo na dominância** (`4a774c913`): `dominatesP` comparava `s2.fitness.second > s2.fitness.second`, sempre falso, e o arquivo Pareto guardava soluções dominadas de mesmo custo (284 nos arquivos finais de referência). Agora compara `s1.fitness.second > s2.fitness.second`, como a função `dominates` de `dominates.cpp`.
+- **C5. Ids de turbina repetidos entre zonas** (`ae245d2c0`): o crossover reiniciava o contador de ids em cada zona (`int id_new = fixd.size();` dentro de `crossoverAux`), e turbinas de zonas diferentes recebiam os mesmos ids. Como o `calculate_interference` devolve 0 para ids iguais, o wake entre elas era ignorado e a potência saía superestimada em toda instância com mais de uma zona. O mesmo layout chegava a ter potências diferentes (no teste com a instância A, 386.025,6 no pai e 386.071,5 no filho idêntico). Nos resultados de referência, os empates de custo aparecem quase só nas instâncias de 2 zonas (A: 15, 172: 189; 240 e 456, de 1 zona: 1 cada). Agora `id_new` é declarado em `crossover` e passado por referência a `crossoverAux`, com um contador único para todas as zonas. No mesmo teste, 0 de 200 filhos têm ids repetidos e as cópias do layout do pai têm a mesma potência. **Os resultados de referência em `dataset/reference/moead/` foram gerados antes desta correção.**
 
 ### 7.4 Desvios do MOEA/D original
 

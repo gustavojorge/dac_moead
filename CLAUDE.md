@@ -53,7 +53,6 @@ Os arquivos precisam terminar com quebra de linha: o loader faz `pop_back()` da 
 
 ## Armadilhas conhecidas
 
-- O crossover reinicia `id_new = fixd.size()` em cada zona, gerando ids repetidos entre zonas; `calculate_interference` devolve 0 para ids iguais, então a potência é superestimada em instâncias com mais de uma zona.
 
 - Vento fixo em 10 m/s e 30°: `moead.sh` passa só 2 argumentos e o sorteio da rosa dos ventos está comentado. Os resultados de referência em `dataset/reference/moead/` (A, 172, 240, 456) usaram vento sorteado.
 - Tchebycheff sem normalização (custo ~10⁷ vs potência ~10⁶).
