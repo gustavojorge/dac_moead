@@ -1,10 +1,6 @@
 #!/bin/bash
 
-ALGO="${ALGO:-nsga2_hybrid}"
-LS="${LS:-apls}"
-export LS
-
-script2="./smaller_scripts/run.sh"
+script2="./smaller_scripts/moead.sh"
 
 batch=("$@")
 
@@ -18,17 +14,17 @@ echo "Using batch: ${batch[@]}"
 for instance in "${batch[@]}"; do
 
   for i in {1..20}; do
-    log_file="./logs/${ALGO}_${instance}.txt"
+    log_file="./logs/${instance}.txt"
 
     echo "Using instance: $instance, Run: $i"
     echo "Appending to log file: $log_file"
 
     # Appending logs to the file
     {
-      echo "Running $ALGO with instance $instance, Run: $i"
+      echo "Running MOEAD with instance $instance, Run: $i"
       bash "$script2" "$instance" "$i"
 
-      echo "$ALGO has been executed for instance: $instance, Run: $i."
+      echo "MOEAD has been executed for instance: $instance, Run: $i."
       echo "---------------------------------------------"
     } >> "$log_file" 2>&1
 
