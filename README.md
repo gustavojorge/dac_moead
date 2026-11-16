@@ -369,7 +369,28 @@ O resultado sempre tem o número correto de turbinas por zona. O MOEA/D gera doi
 
 ## 7. Problemas conhecidos
 
-Pontos encontrados na leitura do código, do mais grave para o menos grave:
+Pontos encontrados na leitura do código, do mais grave para o menos grave.
+
+### 7.1 Status
+
+| # | Problema | Categoria | Status |
+|---|---|---|---|
+| 1 | Ids de turbina repetidos entre zonas superestimam a potência | Erram os objetivos | ❌ Aberto |
+| 2 | Vento fixo em 10 m/s e 30° | Invalidam a comparação | ❌ Aberto |
+| 3 | Tchebycheff sem normalização | Qualidade dos resultados | ❌ Aberto |
+| 4 | Sementes não reprodutíveis | Qualidade dos resultados | ❌ Aberto |
+| 5 | Laço infinito da mutação em zona sem fundação livre | Menor | ❌ Aberto |
+| 6 | Interpolação da curva da turbina fixa usa `power` | Menor | ❌ Aberto |
+| 7 | Orçamento ultrapassado em até ~400 avaliações | Menor | ❌ Aberto |
+| 8 | Código morto (`tch_vector`, `updateEP`, `nsga2.cpp`) | Menor | ❌ Aberto |
+| 9 | `cout << argc` no topo do `log.txt` | Menor | ❌ Aberto |
+| 10 | `__pycache__/*.pyc` versionado | Menor | ❌ Aberto |
+| C1 | `makeall.sh` falhava (binário `nsga2`) e os `.sh` estavam sem permissão de execução | Impediam os experimentos | ✅ Corrigido (`02a50f2fc`) |
+| C2 | `scripts/logs/` não existia e nenhum lote rodava | Impediam os experimentos | ✅ Corrigido (`02a50f2fc`) |
+| C3 | Rodar o lote sobrescrevia os resultados de referência em `dataset/moead/` | Qualidade dos resultados | ✅ Corrigido (`de4bb2b85`) |
+| C4 | Typo na dominância (`s2.fitness.second > s2.fitness.second`) | Qualidade dos resultados | ✅ Corrigido (`4a774c913`) |
+
+### 7.2 Problemas abertos
 
 **Erram o cálculo dos objetivos**
 
@@ -397,7 +418,16 @@ Pontos encontrados na leitura do código, do mais grave para o menos grave:
 9. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
 10. `src/instance_generation/__pycache__/*.pyc` está versionado.
 
-**Desvios do MOEA/D original** (não são bugs, mas valem registro)
+### 7.3 Problemas corrigidos
+
+- **C1. Build** (`02a50f2fc`): o `Makefile` gerava `nsga2`, mas o `makeall.sh` movia `moead`, e o `mv` falhava. Os `.sh` estavam versionados com modo 100644, então o `nohup ./main.sh` falhava com *Permission denied*. Agora `OUTPUT = moead` e os scripts têm bit de execução.
+- **C2. Pasta de logs** (`02a50f2fc`): o `batch.sh` redirecionava para `./logs/batch_*.txt` sem a pasta existir, e nenhum lote rodava. Agora ele faz `mkdir -p ./logs`.
+- **C3. Sobrescrita dos resultados de referência** (`de4bb2b85`): os resultados de A, 172, 240 e 456 ficavam em `dataset/moead/`, a mesma pasta em que o lote grava, e o `create_folders.sh` não criava nada porque a pasta já existia. Agora eles ficam em `dataset/reference/moead/`.
+- **C4. Typo na dominância** (`4a774c913`): `dominatesP` comparava `s2.fitness.second > s2.fitness.second`, sempre falso, e o arquivo Pareto guardava soluções dominadas de mesmo custo (284 nos arquivos finais de referência). Agora compara `s1.fitness.second > s2.fitness.second`, como a função `dominates` de `dominates.cpp`. Os empates de custo continuam surgindo por causa do problema 1, mas o arquivo passa a manter só a cópia de maior potência.
+
+### 7.4 Desvios do MOEA/D original
+
+Não são bugs, mas valem registro:
 
 - B(i) exclui o próprio i; no artigo original, i faz parte da própria vizinhança.
 - Não há limite `nr` de substituições: fiel ao MOEA/D de 2007, mas reduz a diversidade (um bom filho pode virar 10 cópias).
