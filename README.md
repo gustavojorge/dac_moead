@@ -33,7 +33,8 @@ O código vem da branch [`moead-runner`](https://github.com/gustavojorge/MO_WFLO
 │       ├── create_folders.sh      # Cria dataset/moead/<instância>/<run>/
 │       └── moead.sh               # Chama ./exe/moead para (instância, run) e grava log.txt
 ├── dataset/
-│   └── moead/<inst>/<run>/        # Resultados de referência (A, 172, 240, 456), ver seção 3.5
+│   ├── moead/<inst>/<run>/        # Saída das execuções (criada pelos scripts, não versionada)
+│   └── reference/moead/<inst>/<run>/  # Resultados de referência (A, 172, 240, 456), ver seção 3.5
 └── src/moead/
     ├── main.cpp                   # Ponto de entrada: lê a instância e chama moead()
     ├── instance_info.cpp          # Leitura da instância, curvas das turbinas, turbinas fixas
@@ -190,7 +191,7 @@ cd scripts
 - `batch.sh` roda `create_folders.sh`, cria `scripts/logs/` e dispara **52 processos em background** com `nohup`: um para A–J + 0, cinquenta lotes de 10 instâncias (1–500) e um para 501–505. Os logs vão para `scripts/logs/batch_*.txt`.
 - `main.sh` roda **20 execuções** de cada instância do lote, chamando `smaller_scripts/moead.sh <instância> <run>`, e acrescenta a saída a `logs/<instância>.txt`.
 - `moead.sh` executa `./exe/moead <instância> ../dataset/moead/<instância>/<run>/` e grava a saída, com o tempo (`time`), em `log.txt` na mesma pasta.
-- `create_folders.sh` cria `dataset/moead/{A..J,0..505}/{1..20}/`, mas não faz nada se `dataset/moead` já existir. Como `moead.sh` faz `mkdir -p`, isso não impede a execução.
+- `create_folders.sh` cria `dataset/moead/{A..J,0..505}/{1..20}/`, mas não faz nada se `dataset/moead` já existir (por exemplo, numa segunda rodada). Como `moead.sh` faz `mkdir -p`, isso não impede a execução.
 
 ### 3.5 Saídas
 
@@ -203,7 +204,7 @@ Em `dataset/moead/<inst>/<run>/`:
 | `<inst>_moead_<N>.txt` | Arquivo Pareto a cada 100.000 avaliações (`N = 100000, …, 1000000`). Cada linha: `custo potência` (custo em valor absoluto) |
 | `<inst>_moead_layout.txt` | Gerado na avaliação 1.000.000: coordenadas `x y` das turbinas móveis de cada solução do arquivo, com uma linha em branco entre soluções |
 
-**Resultados versionados:** `dataset/moead/` tem as 20 execuções das instâncias A, 172, 240 e 456. Eles foram gerados por uma versão anterior, que **sorteava o vento da rosa dos ventos** (ex.: A/run 1 → 13 m/s, 330°), e não são comparáveis com execuções do código atual, que usa 10 m/s e 30°. Rodar o lote sobrescreve esses arquivos.
+**Resultados de referência:** `dataset/reference/moead/` tem as 20 execuções das instâncias A, 172, 240 e 456, com a mesma estrutura de arquivos. Eles foram gerados por uma versão anterior, que **sorteava o vento da rosa dos ventos** (ex.: A/run 1 → 13 m/s, 330°), e não são comparáveis com execuções do código atual, que usa 10 m/s e 30°. Ficam fora de `dataset/moead/` para que o lote não os sobrescreva.
 
 ---
 
@@ -372,23 +373,22 @@ Pontos encontrados na leitura do código, do mais grave para o menos grave:
 
 **Invalidam a comparação dos experimentos**
 
-1. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados versionados em `dataset/moead/`, que têm ventos sorteados.
+1. **Vento fixo em 10 m/s e 30°.** O `moead.sh` passa só instância e pasta, e o sorteio pela rosa dos ventos está comentado em `instance_info.cpp`. Todas as instâncias e execuções usam o mesmo cenário, diferente dos resultados de referência em `dataset/reference/moead/`, que têm ventos sorteados.
 
 **Afetam a qualidade ou a validade dos resultados**
 
 2. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
-3. **Rodar o lote sobrescreve `dataset/moead/`** (A, 172, 240, 456), inclusive o `log.txt` com o vento original. Pelo mesmo motivo, o `create_folders.sh` não faz nada, porque a pasta já existe.
-4. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso). Uma solução que melhora só a potência, com custo igual, não é considerada dominante.
-5. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
+3. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso). Uma solução que melhora só a potência, com custo igual, não é considerada dominante.
+4. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
 
 **Menores**
 
-6. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
-7. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
-8. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
-9. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
-10. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
-11. `src/instance_generation/__pycache__/*.pyc` está versionado.
+5. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
+6. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
+7. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
+8. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
+9. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
+10. `src/instance_generation/__pycache__/*.pyc` está versionado.
 
 **Desvios do MOEA/D original** (não são bugs, mas valem registro)
 
