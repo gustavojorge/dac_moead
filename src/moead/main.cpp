@@ -12,6 +12,7 @@ int stop_criteria = 1000000;
 string algorithm = "moead";
 string instance = "A";
 string root_folder = "./";
+string crossover_type = "onepoint";
 
 int main(int argc, char* argv[]){
 
@@ -20,6 +21,15 @@ int main(int argc, char* argv[]){
     } else if (argc > 2){
         instance = argv[1];
         root_folder = argv[2];
+    }
+
+    if(argc > 5){
+        crossover_type = argv[5];
+    }
+
+    if(crossover_type != "onepoint" && crossover_type != "blockswap"){
+        cerr << "ERROR: Invalid crossover type: " << crossover_type << " (use onepoint or blockswap)" << endl;
+        return 1;
     }
 
     string path;
@@ -38,7 +48,8 @@ int main(int argc, char* argv[]){
     cout << "Number of fixed turbines: " << fixd.size() << endl;
     cout << "Number of mobile turbines: " << sum << endl;
     cout << "Wind: " << wind << endl;
-    cout << "Angle: " << angle << endl << endl;
+    cout << "Angle: " << angle << endl;
+    cout << "Crossover: " << crossover_type << endl << endl;
 
     cout << "Run time:" << endl;
     

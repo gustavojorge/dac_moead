@@ -12,6 +12,7 @@ extern std::string instance;
 extern std::string algorithm;
 extern std::string root_folder;
 extern int stop_criteria;
+extern std::string crossover_type;
 
 std::vector<Solution> create_initial_population(int size_population);
 

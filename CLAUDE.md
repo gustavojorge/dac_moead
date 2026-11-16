@@ -13,7 +13,7 @@ MOEA/D em C++17 para o WFLOP biobjetivo: posicionar turbinas eólicas offshore e
 make -C src/moead rebuild                      # só compila (gera src/moead/moead)
 
 cd scripts
-./exe/moead <inst> <saida/> [<angulo> <vento>] # padrão: 30° e 10 m/s
+./exe/moead <inst> <saida/> [<angulo> <vento> [<onepoint|blockswap>]] # padrão: 30°, 10 m/s, onepoint
 ./batch.sh                                     # 52 processos nohup, 20 runs por instância
 ```
 
@@ -37,7 +37,7 @@ Os arquivos precisam terminar com quebra de linha: o loader faz `pop_back()` da 
 - `instance_info.cpp` — globais do problema: `foundations[z]`, `fixd`, `turbines_per_zone`, `num_zones`, `wind`, `angle`, `power`, `thrust_coef`. Lê `argv[3]`/`argv[4]` (ângulo/vento) só se `argc >= 5`.
 - `src/global_modules/generate_initial_population/generate_random_solution/generate_rSolution.cpp` — solução aleatória, `calculate_cost`, `calculate_power` e `calculate_interference` (wake de Jensen com soma quadrática).
 - `src/metaheuristics/moead/` — `moead.cpp` (laço principal) e `modules/` (pesos, vizinhança, z*, Tchebycheff).
-- `src/global_modules/genetic_operators/` — `crossover.cpp` e `mutation.cpp` (os únicos compilados).
+- `src/global_modules/genetic_operators/` — `crossover.cpp` (um ponto), `block_swap_crossover.cpp` (retângulo, Tran et al. 2013) e `mutation.cpp` (os únicos compilados). O `moead.cpp` escolhe o crossover pelo global `crossover_type` (`argv[5]`, padrão `onepoint`); os dois têm a assinatura `Solution (Solution&, Solution&)`.
 - `src/adaptive_grid/` — `BoundedParetoSet` (arquivo global, máx. 300, grid adaptativo).
 - `src/metaheuristics/nsga2/` é compilado, mas não é chamado; `metafeatures/` e `src/utils/` não são compilados.
 - Headers ficam em `headers/` espelhando `src/`. Um `.cpp` novo precisa entrar em `SRC_FILES` no `Makefile`.

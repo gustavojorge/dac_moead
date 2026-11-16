@@ -30,6 +30,7 @@ SRC_FILES = \
     $(RSOLUTION_DIR)/generate_rSolution.cpp \
     $(META_DIR)/mutation.cpp \
     $(CROSS_DIR)/crossover.cpp \
+    $(CROSS_DIR)/block_swap_crossover.cpp \
     $(SRC_DIR)/metaheuristics/moead/modules/generate_neighborhood.cpp \
     $(SRC_DIR)/metaheuristics/moead/modules/generate_weight_vectors.cpp \
     $(SRC_DIR)/metaheuristics/moead/modules/get_best_z_point.cpp \

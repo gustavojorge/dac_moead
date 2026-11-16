@@ -15,6 +15,7 @@
 
 #include "../../../headers/global_modules/genetic_operators/mutation.h"
 #include "../../../headers/global_modules/genetic_operators/crossover.h"
+#include "../../../headers/global_modules/genetic_operators/block_swap_crossover.h"
 
 #include "../../../headers/global_modules/dominates.h"
 #include "../../../headers/global_modules/isEqual.h"
@@ -34,6 +35,7 @@ void moead(vector<Solution>& population){
   double input_cross_prob = 0.5;
   double input_mutation_prob = 0.5;
   int number_of_neighbors = 10;
+  Solution (*crossover_operator)(Solution&, Solution&) = crossover_type == "blockswap" ? block_swap_crossover : crossover;
 
   // Step 1.1: Initialize EP (External Population)
   //The EP vector will contain only the non-dominated and not equal solutions from the initial population
@@ -92,8 +94,8 @@ void moead(vector<Solution>& population){
       //CROSSOVER
 
       if((static_cast<double>(rand()) / RAND_MAX) < input_cross_prob){ 
-        *child1 = crossover(*parentA, *parentB);
-        *child2 = crossover(*parentB, *parentA);        
+        *child1 = crossover_operator(*parentA, *parentB);
+        *child2 = crossover_operator(*parentB, *parentA);
       }
 
       if((static_cast<double>(rand()) / RAND_MAX) < input_mutation_prob){
