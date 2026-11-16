@@ -57,7 +57,6 @@ Os arquivos precisam terminar com quebra de linha: o loader faz `pop_back()` da 
 
 - Vento fixo em 10 m/s e 30°: `moead.sh` passa só 2 argumentos e o sorteio da rosa dos ventos está comentado. Os resultados de referência em `dataset/reference/moead/` (A, 172, 240, 456) usaram vento sorteado.
 - Tchebycheff sem normalização (custo ~10⁷ vs potência ~10⁶).
-- `dominatesP` em `ParetoSet.cpp` tem typo (`s2.fitness.second > s2.fitness.second`).
 - Sementes não reprodutíveis (`srand(time(nullptr))`, `random_device`).
 
 A lista completa está na seção "Problemas conhecidos" do README.

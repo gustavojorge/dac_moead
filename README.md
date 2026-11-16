@@ -386,17 +386,16 @@ Pontos encontrados na leitura do código, do mais grave para o menos grave:
 **Afetam a qualidade ou a validade dos resultados**
 
 3. **Tchebycheff sem normalização**: o custo (~10⁷) e a potência (~10⁶) estão em escalas diferentes. O termo do custo domina o `max` na maior parte dos pesos, e os subproblemas não se espalham uniformemente pela frente.
-4. **Dominância com typo**: em `dominatesP` ([ParetoSet.cpp:29](src/moead/src/adaptive_grid/ParetoSet.cpp#L29)) está `s2.fitness.second > s2.fitness.second` (sempre falso); a função `dominates` de [dominates.cpp](src/moead/src/global_modules/dominates.cpp) tem a versão correta (`solutionA.fitness.second > solutionB.fitness.second`). Uma solução com custo igual e potência maior não é considerada dominante, e o arquivo Pareto guarda as duas. Com o problema 1, isso acontece com cópias do mesmo layout: os arquivos finais de referência têm 284 soluções dominadas por outra de mesmo custo, em 22.650.
-5. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
+4. **Sementes não reprodutíveis** (`srand(time(nullptr))`, `random_device`): não dá para repetir uma execução específica.
 
 **Menores**
 
-6. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
-7. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
-8. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
-9. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
-10. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
-11. `src/instance_generation/__pycache__/*.pyc` está versionado.
+5. A mutação entra em laço infinito se uma zona não tiver posição livre (todas as fundações ocupadas).
+6. Na leitura da curva da turbina fixa, a interpolação usa `power` (da turbina móvel, ainda 0) em vez do valor anterior. Só afeta ventos que não estão exatamente na tabela.
+7. O orçamento pode ser ultrapassado em até ~400 avaliações (critério checado só no início da geração).
+8. Código morto: `tch_vector` e `updateEP` são calculados ou declarados, mas não usados; `nsga2.cpp` é compilado, mas não chamado.
+9. `instance_info.cpp` imprime `argc` (`cout << argc`) no início de todo `log.txt`.
+10. `src/instance_generation/__pycache__/*.pyc` está versionado.
 
 **Desvios do MOEA/D original** (não são bugs, mas valem registro)
 

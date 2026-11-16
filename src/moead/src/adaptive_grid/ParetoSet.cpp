@@ -26,7 +26,7 @@ double getObj(Solution *s, int obj){
 
 bool dominatesP(Solution &s1, Solution &s2){
     return (s1.fitness.first >= s2.fitness.first && s1.fitness.second >= s2.fitness.second) &&
-           (s1.fitness.first >  s2.fitness.first || s2.fitness.second >  s2.fitness.second);
+           (s1.fitness.first >  s2.fitness.first || s1.fitness.second >  s2.fitness.second);
 }
 
 bool equals(Solution &s1, Solution &s2){
