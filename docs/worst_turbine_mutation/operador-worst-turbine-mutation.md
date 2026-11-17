@@ -1,8 +1,8 @@
 # Operador Worst Turbine Mutation no MoWFLOP
 
-Este documento descreve o operador de mutação **Worst Turbine Mutation**: o que Ju e Liu propuseram, como o operador foi adaptado ao nosso problema biobjetivo e como será implementado neste repositório.
+Este documento descreve o operador de mutação **Worst Turbine Mutation**: o que Ju e Liu propuseram, como o operador foi adaptado ao nosso problema biobjetivo e como foi implementado neste repositório.
 
-**Status:** proposta aprovada, ainda não implementada. A seção 5 descreve o plano de implementação.
+Implementação: [worst_turbine_mutation.cpp](../../src/moead/src/global_modules/genetic_operators/mutation/worst_turbine_mutation.cpp).
 
 > **Base bibliográfica.** O operador é baseado na **"relocation of the worst turbines" do algoritmo AGA de Ju e Liu (2019) [1]**, seções 3.3 (passo 4) e 6. O que foi mantido do artigo e o que foi adaptado ao nosso problema está na seção 2, e a referência completa está na seção 8.
 
@@ -146,13 +146,13 @@ O operador não cria hiperparâmetros numéricos novos.
 
 ---
 
-## 5. Plano de implementação
+## 5. Implementação
 
 ### 5.1 Potência por turbina guardada na avaliação
 
 Encontrar a turbina de menor potência exige a potência de cada turbina com o wake. O `calculate_power` já calcula esse valor (`power_produced(windResulted, turbine)`), mas o descarta depois de somar. Recalcular dentro da mutação custaria um cálculo de wake inteiro a mais por chamada.
 
-A proposta é guardar esse valor num campo novo da `Turbine` (por exemplo, `generated_power`) durante o `calculate_power`. Assim, encontrar a pior turbina não custa nada.
+Esse valor é guardado no campo `generated_power` da `Turbine` durante o `calculate_power`. Assim, encontrar a pior turbina não custa nada. A potência total da solução continua sendo calculada exatamente como antes.
 
 Os valores estão sempre atualizados quando a mutação é chamada, porque toda solução que chega a ela foi avaliada antes:
 - população inicial: avaliada em `generate_solution`;
@@ -185,13 +185,31 @@ cd scripts
 
 A mutação é o 6º argumento, então é preciso passar também o ângulo, o vento e o crossover.
 
-### 5.4 Validação prevista
+### 5.4 Validação
 
-- **Invariantes**, como no Block Swap: número de turbinas por zona, `grid` coerente com as turbinas, ids únicos, fitness conferido ao recalcular.
-- **Escolha da turbina:** conferir que a turbina movida é de fato a pior em custo ou em potência da zona sorteada.
-- **Foco:** conferir que a frequência do foco em custo acompanha λᵢ₁.
-- **Potência guardada:** conferir que `generated_power` bate com um recálculo independente.
-- **Contagem:** 1 avaliação por chamada.
+O operador foi testado com o código real nas instâncias A (2 zonas, 34 turbinas) e 240 (1 zona, 77 turbinas). Para cada probabilidade de foco em custo (0; 0,25; 0,5; 0,75; 1), foram 400 chamadas: metade sobre soluções aleatórias e metade sobre soluções aleatórias com 20 mutações aleatórias.
+
+Em todas as chamadas, sem nenhuma falha:
+- exatamente uma turbina foi movida, na mesma zona, para uma fundação que estava livre, e manteve o id;
+- a turbina movida era sempre a pior em custo ou a pior em potência da zona sorteada;
+- o número de turbinas por zona, a coerência entre `grid` e turbinas e a unicidade dos ids se mantiveram;
+- `generated_power` bateu com um recálculo independente da potência de cada turbina;
+- o custo e a potência total bateram com um recálculo independente (a potência total, feito com a fórmula original, confirma que guardar `generated_power` não alterou o cálculo);
+- cada chamada contou exatamente 1 avaliação.
+
+Frequência do foco em custo:
+
+| Probabilidade de foco em custo | A | 240 |
+|---|---|---|
+| 0 | 2,8% | 1,0% |
+| 0,25 | 28,2% | 23,2% |
+| 0,5 | 52,2% | 52,0% |
+| 0,75 | 75,8% | 76,0% |
+| 1 | 100% | 100% |
+
+As frequências acompanham a probabilidade. Com probabilidade 0, os 1% a 3% contados como "custo" são casos em que a mesma turbina era a pior nos dois critérios. O caso sem perda por wake (seção 3, passo 4) não ocorreu nesses testes: com o vento de 30° e o parque fixo, sempre havia alguma turbina sob wake.
+
+O MOEA/D completo rodou até o fim com orçamento reduzido (50 mil avaliações) com as duas mutações, e um valor inválido no 6º argumento encerra o programa com erro. Uma rodada curta não permite comparar o desempenho das mutações.
 
 ---
 
