@@ -4,13 +4,15 @@ Este documento descreve o operador **Block Swap Crossover** como foi implementad
 
 Implementação: [block_swap_crossover.cpp](../../src/moead/src/global_modules/genetic_operators/crossover/block_swap_crossover.cpp).
 
+> **Base bibliográfica.** O operador é baseado no **Block Swap Crossover de Tran et al. (GECCO 2013) [1]**, seção 3.2 e Algoritmo 3. Li, Özcan e John (2017) [2] reutilizam o operador do Tran e entram como fonte secundária. O que foi mantido do artigo e o que foi adaptado ao nosso problema está na seção 1.2, e as referências completas estão na seção 9.
+
 ---
 
 ## 1. Origem na literatura
 
-### 1.1 Tran et al. (GECCO 2013)
+### 1.1 Tran et al. (GECCO 2013), a base do operador [1]
 
-O operador foi proposto por Tran, Wu, Denison, Ackling, Wagner e Neumann em *Fast and effective multi-objective optimisation of wind turbine placement* (GECCO 2013, [doi:10.1145/2463372.2463541](https://doi.org/10.1145/2463372.2463541)), na seção 3.2 (Algoritmo 3).
+O operador foi proposto por Tran, Wu, Denison, Ackling, Wagner e Neumann em *Fast and effective multi-objective optimisation of wind turbine placement* (GECCO 2013, [doi:10.1145/2463372.2463541](https://doi.org/10.1145/2463372.2463541)), na seção 3.2 (Algoritmo 3). Nossa implementação segue esse artigo.
 
 O cenário do artigo é diferente do nosso:
 
@@ -32,11 +34,26 @@ O operador do artigo, para gerar o filho 1 a partir de P1 (base) e P2 (doador):
 
 O filho 2 é gerado da mesma forma, trocando os papéis dos pais. No artigo, o crossover é aplicado com probabilidade 0,3.
 
-### 1.2 Li, Özcan e John (2017)
+### 1.2 O que mantivemos do Tran e o que adaptamos
+
+**Mantido do artigo:**
+- Troca de um **bloco retangular** entre dois pais: o primeiro é a base e o segundo, o doador. São gerados dois filhos, um com cada pai como base.
+- Regra de aceitação do retângulo: o doador precisa ter dentro dele pelo menos tantas turbinas quanto a base (`|I₂| ≥ |I₁|`).
+- Até T tentativas de retângulo; se nenhuma servir, o filho é o próprio pai.
+- Número de turbinas preservado: o excesso (`|I₂| − |I₁|`) vem de turbinas de fora do bloco, escolhidas ao acaso. No artigo, elas são movidas para dentro do bloco e reposicionadas como no doador, e o resultado final é o mesmo.
+
+**Adaptado por nós:**
+- **Sem distância mínima:** o passo 3 do artigo (afastar as bordas do retângulo das turbinas) não existe aqui, porque o nosso problema não tem essa restrição.
+- **Fundações discretas e zonas:** as turbinas ficam na fundação que tinham no pai, e o operador é aplicado zona por zona, cada uma com o seu retângulo.
+- **Posição e tamanho do retângulo:** centrado numa turbina do doador, com largura e altura entre 10% e 50% das dimensões da zona. Os valores são nossos e ainda não foram calibrados.
+- **Probabilidade de crossover:** a do MOEA/D (0,5), e não os 0,3 do artigo.
+- **Filho idêntico à base:** devolvido sem avaliar e sem contar. É uma decisão nossa, em discussão em [discussao_reuniao.md](../discussao_reuniao.md).
+
+### 1.3 Li, Özcan e John (2017), fonte secundária [2]
 
 *Multi-objective evolutionary algorithms and hyper-heuristics for wind farm layout optimisation* (Renewable Energy 105, 2017, [doi:10.1016/j.renene.2016.12.022](https://doi.org/10.1016/j.renene.2016.12.022)) reutiliza os operadores de Tran et al. (Block Swap e Movement Mutation) com probabilidade de crossover 0,3. O foco do artigo são as hiper-heurísticas de seleção, e não o operador.
 
-### 1.3 O que a literatura mostra e o que não mostra
+### 1.4 O que a literatura mostra e o que não mostra
 
 - O Block Swap é um operador **específico do domínio**, usado em pelo menos dois trabalhos de WFLOP multiobjetivo.
 - **Nenhum dos dois artigos compara o Block Swap com outro crossover.** Não há evidência isolada de que ele seja superior a um corte simples.
@@ -190,3 +207,32 @@ O MOEA/D completo também rodou até o fim com orçamento reduzido (50 mil avali
 > *"Além do crossover de um ponto, que, pela ordenação das fundações candidatas em varredura do grid, recombina faixas contíguas de cada zona, foi implementado o operador Block Swap Crossover, adaptado de Tran et al. (2013) e também utilizado por Li et al. (2017). Para cada zona, o operador sorteia um retângulo centrado numa turbina do segundo pai e substitui as turbinas do primeiro pai dentro dele pelas do segundo, desde que o segundo pai tenha ao menos tantas turbinas na região quanto o primeiro. O excedente é removido aleatoriamente entre as turbinas do primeiro pai fora do retângulo, o que preserva o número exato de turbinas por zona e não introduz posições novas. Diferentemente do trabalho original, não há ajuste de distância mínima, pois o problema considerado não impõe essa restrição."*
 
 O operador deve ser apresentado como uma **estratégia de variação informada pelo domínio**, e não como superior ao crossover de um ponto: nenhum dos trabalhos de origem isola o efeito do operador, e a vantagem dele sobre um corte em faixa precisa ser demonstrada experimentalmente.
+
+---
+
+## 9. Referências
+
+**[1]** R. Tran, J. Wu, C. Denison, T. Ackling, M. Wagner, F. Neumann. *Fast and effective multi-objective optimisation of wind turbine placement*. In: Proceedings of the 15th Annual Conference on Genetic and Evolutionary Computation (GECCO '13), Amsterdã, 2013, pp. 1381–1388. DOI: [10.1145/2463372.2463541](https://doi.org/10.1145/2463372.2463541). **Fonte do operador** (seção 3.2 e Algoritmo 3). PDF: [crossover1_tran.pdf](crossover1_tran.pdf).
+
+**[2]** W. Li, E. Özcan, R. John. *Multi-objective evolutionary algorithms and hyper-heuristics for wind farm layout optimisation*. Renewable Energy, v. 105, pp. 473–482, 2017. DOI: [10.1016/j.renene.2016.12.022](https://doi.org/10.1016/j.renene.2016.12.022). Reutiliza os operadores de [1] (fonte secundária). PDF: [crossover1.pdf](crossover1.pdf).
+
+```bibtex
+@inproceedings{tran2013fast,
+  author    = {Tran, Raymond and Wu, Junhua and Denison, Christopher and Ackling, Thomas and Wagner, Markus and Neumann, Frank},
+  title     = {Fast and effective multi-objective optimisation of wind turbine placement},
+  booktitle = {Proceedings of the 15th Annual Conference on Genetic and Evolutionary Computation (GECCO '13)},
+  pages     = {1381--1388},
+  year      = {2013},
+  doi       = {10.1145/2463372.2463541}
+}
+
+@article{li2017multi,
+  author  = {Li, Wenwen and {\"O}zcan, Ender and John, Robert},
+  title   = {Multi-objective evolutionary algorithms and hyper-heuristics for wind farm layout optimisation},
+  journal = {Renewable Energy},
+  volume  = {105},
+  pages   = {473--482},
+  year    = {2017},
+  doi     = {10.1016/j.renene.2016.12.022}
+}
+```
