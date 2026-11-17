@@ -14,6 +14,7 @@
 #include "../../../headers/metaheuristics/moead/modules/tchebycheff.h"
 
 #include "../../../headers/global_modules/genetic_operators/mutation.h"
+#include "../../../headers/global_modules/genetic_operators/worst_turbine_mutation.h"
 #include "../../../headers/global_modules/genetic_operators/crossover.h"
 #include "../../../headers/global_modules/genetic_operators/block_swap_crossover.h"
 
@@ -99,8 +100,13 @@ void moead(vector<Solution>& population){
       }
 
       if((static_cast<double>(rand()) / RAND_MAX) < input_mutation_prob){
-        mutation(*child1);
-        mutation(*child2);
+        if(mutation_type == "worst"){
+          worst_turbine_mutation(*child1, lambda_vector[i].first);
+          worst_turbine_mutation(*child2, lambda_vector[i].first);
+        } else {
+          mutation(*child1);
+          mutation(*child2);
+        }
       }
 
       delete parentA;

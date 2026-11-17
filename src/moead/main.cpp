@@ -13,6 +13,7 @@ string algorithm = "moead";
 string instance = "A";
 string root_folder = "./";
 string crossover_type = "onepoint";
+string mutation_type = "random";
 
 int main(int argc, char* argv[]){
 
@@ -27,8 +28,17 @@ int main(int argc, char* argv[]){
         crossover_type = argv[5];
     }
 
+    if(argc > 6){
+        mutation_type = argv[6];
+    }
+
     if(crossover_type != "onepoint" && crossover_type != "blockswap"){
         cerr << "ERROR: Invalid crossover type: " << crossover_type << " (use onepoint or blockswap)" << endl;
+        return 1;
+    }
+
+    if(mutation_type != "random" && mutation_type != "worst"){
+        cerr << "ERROR: Invalid mutation type: " << mutation_type << " (use random or worst)" << endl;
         return 1;
     }
 
@@ -49,7 +59,8 @@ int main(int argc, char* argv[]){
     cout << "Number of mobile turbines: " << sum << endl;
     cout << "Wind: " << wind << endl;
     cout << "Angle: " << angle << endl;
-    cout << "Crossover: " << crossover_type << endl << endl;
+    cout << "Crossover: " << crossover_type << endl;
+    cout << "Mutation: " << mutation_type << endl << endl;
 
     cout << "Run time:" << endl;
     

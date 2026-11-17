@@ -169,7 +169,7 @@ As instâncias sintéticas são geradas por [script.py](src/moead/src/instance_g
 
 ```bash
 cd scripts
-./exe/moead <instância> <pasta_saida/> [<ângulo> <vento> [<crossover>]]
+./exe/moead <instância> <pasta_saida/> [<ângulo> <vento> [<crossover> [<mutação>]]]
 ```
 
 | Arg | Exemplo | Descrição |
@@ -179,10 +179,11 @@ cd scripts
 | `ângulo` | `330` | Direção do vento em graus. Só é lido se `vento` também for passado. Padrão: **30** |
 | `vento` | `13` | Velocidade do vento em m/s. Padrão: **10** |
 | `crossover` | `blockswap` | Operador de crossover: `onepoint` (padrão) ou `blockswap` (ver [seção 5](#5-operadores-genéticos)). Só é lido se `ângulo` e `vento` também forem passados; outro valor encerra com erro |
+| `mutação` | `worst` | Operador de mutação: `random` (padrão) ou `worst` (ver [seção 5](#5-operadores-genéticos)). Só é lido se os quatro argumentos anteriores forem passados; outro valor encerra com erro |
 
-Exemplo com o Block Swap e o cenário de vento padrão: `./exe/moead A ../dataset/moead/A/1/ 30 10 blockswap`.
+Exemplos com o cenário de vento padrão: `./exe/moead A ../dataset/moead/A/1/ 30 10 blockswap` (Block Swap) e `./exe/moead A ../dataset/moead/A/1/ 30 10 onepoint worst` (Worst Turbine Mutation).
 
-O `moead.sh` passa só os dois primeiros argumentos, então os experimentos em lote rodam sempre com **vento de 10 m/s, ângulo de 30° e crossover `onepoint`** (ver [problemas conhecidos](#7-problemas-conhecidos)).
+O `moead.sh` passa só os dois primeiros argumentos, então os experimentos em lote rodam sempre com **vento de 10 m/s, ângulo de 30°, crossover `onepoint` e mutação `random`** (ver [problemas conhecidos](#7-problemas-conhecidos)).
 
 ### 3.4 Execução em lote
 
@@ -333,7 +334,7 @@ A potência total exige comparar todos os pares de turbinas: custo O((n + F)²) 
 
 ## 5. Operadores genéticos
 
-Arquivos: [crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/crossover.cpp), [block_swap_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_swap_crossover.cpp) e [mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/mutation.cpp). Todos avaliam a solução gerada, inserem no arquivo Pareto global e incrementam o contador de avaliações.
+Arquivos: [crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/crossover.cpp), [block_swap_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_swap_crossover.cpp), [mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/mutation.cpp) e [worst_turbine_mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/worst_turbine_mutation.cpp). Todos avaliam a solução gerada, inserem no arquivo Pareto global e incrementam o contador de avaliações.
 
 O crossover usado é escolhido pelo 5º argumento da linha de comando (`onepoint` ou `blockswap`, ver seção 3.3). Nos dois casos, o MOEA/D gera dois filhos: `crossover(A, B)` e `crossover(B, A)`, e o filho é numerado com ids únicos em todo o parque.
 
@@ -353,7 +354,17 @@ O resultado sempre tem o número correto de turbinas por zona. Como o `available
 
 Toda turbina do filho vem de um dos pais (nenhuma posição aleatória nova) e fica na mesma fundação, com o mesmo custo. Se o filho sair com o mesmo layout da base, ela é devolvida sem nova avaliação. Diferente do artigo original, não há distância mínima, porque o problema não tem essa restrição.
 
-**Mutação (realocação de uma turbina)**: sorteia **uma zona** e duas posições, uma ocupada e uma livre, e move a turbina para a posição livre. A cardinalidade é preservada.
+A mutação usada é escolhida pelo 6º argumento da linha de comando (`random` ou `worst`, ver seção 3.3). As duas movem **uma** turbina de uma zona sorteada para uma fundação livre da mesma zona, o que preserva a cardinalidade. A diferença está em qual turbina é movida.
+
+**Mutação aleatória (`random`, padrão)**: sorteia uma posição ocupada e uma livre, e move a turbina para a posição livre.
+
+**Worst Turbine Mutation (`worst`)** — adaptada da *relocation of the worst turbines* do AGA de Ju e Liu (Applied Energy, 2019), que é mono-objetivo e move a turbina de menor potência. Na iteração do subproblema i do MOEA/D:
+1. Sorteia uma zona.
+2. Com probabilidade λᵢ₁ (o peso do custo no subproblema), o foco é o **custo**; caso contrário, é a **potência**. Não há hiperparâmetro novo.
+3. Escolhe a pior turbina da zona: a de fundação mais cara (custo) ou a de menor potência gerada, com o wake (potência). Se a pior em potência não sofrer wake, o foco passa para o custo.
+4. Move essa turbina para uma fundação livre sorteada na mesma zona, mantendo o id.
+
+A potência gerada por cada turbina móvel é guardada em `Turbine::generated_power` durante o `calculate_power`, então achar a pior turbina não custa avaliação extra. Detalhes em [docs/worst_turbine_mutation](docs/worst_turbine_mutation/operador-worst-turbine-mutation.md).
 
 `mutationElisama.cpp` e `mutationFeature.cpp` são variantes antigas (usadas na extração de metafeatures) e não são compiladas.
 
@@ -370,6 +381,8 @@ Toda turbina do filho vem de um dos pais (nenhuma posição aleatória nova) e f
 | Operador de crossover | `onepoint` (padrão) ou `blockswap` | 5º argumento, `crossover_type` em [main.cpp](src/moead/main.cpp#L15) |
 | Block Swap: tamanho do retângulo | 10% a 50% da largura e da altura da zona | `BLOCK_SWAP_MIN_FRACTION`, `BLOCK_SWAP_MAX_FRACTION` em [block_swap_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_swap_crossover.cpp) |
 | Block Swap: tentativas por zona | 10 | `BLOCK_SWAP_MAX_ATTEMPTS` |
+| Operador de mutação | `random` (padrão) ou `worst` | 6º argumento, `mutation_type` em [main.cpp](src/moead/main.cpp#L16) |
+| Worst Turbine Mutation: turbinas movidas e foco | 1 turbina; foco em custo com probabilidade λᵢ₁ do subproblema | [worst_turbine_mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/worst_turbine_mutation.cpp) |
 | Vetores de peso | Uniformes, `λᵢ = (i/(N−1), 1 − i/(N−1))` | `build_weight_vector` |
 | Função de agregação | Tchebycheff, sem normalização | `calculate_gte` |
 | Ponto de referência z* | Máximo de cada objetivo no arquivo Pareto, atualizado a cada subproblema | Step 2.3 |
@@ -478,6 +491,7 @@ pkill -f "./main.sh"
 ## Referências
 
 - Q. Zhang, H. Li. *MOEA/D: A Multiobjective Evolutionary Algorithm Based on Decomposition*. IEEE TEC, 2007.
+- X. Ju, F. Liu. *Wind farm layout optimization using self-informed genetic algorithm with information guided exploitation*. Applied Energy 248, 2019. https://doi.org/10.1016/j.apenergy.2019.04.084
 - R. Tran, J. Wu, C. Denison, T. Ackling, M. Wagner, F. Neumann. *Fast and effective multi-objective optimisation of wind turbine placement*. GECCO 2013. https://doi.org/10.1145/2463372.2463541
 - W. Li, E. Özcan, R. John. *Multi-objective evolutionary algorithms and hyper-heuristics for wind farm layout optimisation*. Renewable Energy 105, 2017. https://doi.org/10.1016/j.renene.2016.12.022
 - Y. Chen, H. Li, B. He, P. Wang, K. Jin. *Multi-objective genetic algorithm based innovative wind farm layout optimization method*.

@@ -136,7 +136,8 @@ double calculate_power(Solution& sol){
             // cout << "Velocidade do vento em "<< sol.turbines[i].id << " : " <<
             //  wind << " produz " << power_produced(wind, sol.turbines[i]) << endl;
 
-            power += power_produced(windResulted, sol.turbines[z][i]);
+            sol.turbines[z][i].generated_power = power_produced(windResulted, sol.turbines[z][i]);
+            power += sol.turbines[z][i].generated_power;
         }
     }
 
