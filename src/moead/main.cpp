@@ -32,8 +32,8 @@ int main(int argc, char* argv[]){
         mutation_type = argv[6];
     }
 
-    if(crossover_type != "onepoint" && crossover_type != "blockswap"){
-        cerr << "ERROR: Invalid crossover type: " << crossover_type << " (use onepoint or blockswap)" << endl;
+    if(crossover_type != "onepoint" && crossover_type != "blockswap" && crossover_type != "blockcopy"){
+        cerr << "ERROR: Invalid crossover type: " << crossover_type << " (use onepoint, blockswap or blockcopy)" << endl;
         return 1;
     }
 

@@ -9,6 +9,7 @@
 #include "../headers/global_modules/genetic_operators/mutation.h"
 #include "../headers/global_modules/genetic_operators/crossover.h"
 #include "../headers/global_modules/genetic_operators/block_swap_crossover.h"
+#include "../headers/global_modules/genetic_operators/block_copy_crossover.h"
 #include "../headers/global_modules/genetic_operators/worst_turbine_mutation.h"
 
 #include "../headers/global_modules/isEqual.h"

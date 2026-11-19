@@ -178,7 +178,7 @@ cd scripts
 | `pasta_saida/` | `../dataset/moead/A/1/` | Prefixo de saída — **precisa da barra final** (padrão `./`) |
 | `ângulo` | `330` | Direção do vento em graus. Só é lido se `vento` também for passado. Padrão: **30** |
 | `vento` | `13` | Velocidade do vento em m/s. Padrão: **10** |
-| `crossover` | `blockswap` | Operador de crossover: `onepoint` (padrão) ou `blockswap` (ver [seção 5](#5-operadores-genéticos)). Só é lido se `ângulo` e `vento` também forem passados; outro valor encerra com erro |
+| `crossover` | `blockswap` | Operador de crossover: `onepoint` (padrão), `blockswap` ou `blockcopy` (ver [seção 5](#5-operadores-genéticos)). Só é lido se `ângulo` e `vento` também forem passados; outro valor encerra com erro |
 | `mutação` | `worst` | Operador de mutação: `random` (padrão) ou `worst` (ver [seção 5](#5-operadores-genéticos)). Só é lido se os quatro argumentos anteriores forem passados; outro valor encerra com erro |
 
 Exemplos com o cenário de vento padrão: `./exe/moead A ../dataset/moead/A/1/ 30 10 blockswap` (Block Swap) e `./exe/moead A ../dataset/moead/A/1/ 30 10 onepoint worst` (Worst Turbine Mutation).
@@ -323,7 +323,7 @@ A potência total exige comparar todos os pares de turbinas: custo O((n + F)²) 
 ### 4.7 Orçamento de avaliações
 
 - **Máximo**: `stop_criteria = 1.000.000` avaliações ([main.cpp](src/moead/main.cpp#L11)). O contador global é `countRevalue`.
-- **O que conta como 1 avaliação**: cada chamada de `calculate_cost` + `calculate_power` sobre uma nova solução, isto é, cada solução da população inicial, cada filho de crossover e cada mutação. No Block Swap, o filho que sai com o mesmo layout do pai-base não é avaliado nem contado.
+- **O que conta como 1 avaliação**: cada chamada de `calculate_cost` + `calculate_power` sobre uma nova solução, isto é, cada solução da população inicial, cada filho de crossover e cada mutação. No Block Swap e no BlockCopy, o filho que sai com o mesmo layout do pai-base não é avaliado nem contado.
 - **Como é gasto**:
   - 100 avaliações na população inicial;
   - por subproblema: 0, 2 ou 4 avaliações (crossover com prob. 0.5 gera 2 filhos; mutação com prob. 0.5 muta os 2) → em média **~200 avaliações por geração**, ou seja, cerca de **5.000 gerações**.
@@ -334,9 +334,9 @@ A potência total exige comparar todos os pares de turbinas: custo O((n + F)²) 
 
 ## 5. Operadores genéticos
 
-Arquivos: [crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/crossover.cpp), [block_swap_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_swap_crossover.cpp), [mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/mutation.cpp) e [worst_turbine_mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/worst_turbine_mutation.cpp). Todos avaliam a solução gerada, inserem no arquivo Pareto global e incrementam o contador de avaliações.
+Arquivos: [crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/crossover.cpp), [block_swap_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_swap_crossover.cpp), [block_copy_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_copy_crossover.cpp), [mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/mutation.cpp) e [worst_turbine_mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/worst_turbine_mutation.cpp). Todos avaliam a solução gerada, inserem no arquivo Pareto global e incrementam o contador de avaliações.
 
-O crossover usado é escolhido pelo 5º argumento da linha de comando (`onepoint` ou `blockswap`, ver seção 3.3). Nos dois casos, o MOEA/D gera dois filhos: `crossover(A, B)` e `crossover(B, A)`, e o filho é numerado com ids únicos em todo o parque.
+O crossover usado é escolhido pelo 5º argumento da linha de comando (`onepoint`, `blockswap` ou `blockcopy`, ver seção 3.3). Nos três casos, o MOEA/D gera dois filhos: `crossover(A, B)` e `crossover(B, A)`, e o filho é numerado com ids únicos em todo o parque.
 
 **Crossover de um ponto (`onepoint`, padrão)** — para cada zona:
 1. Sorteia um ponto de corte `c` sobre o vetor de fundações.
@@ -353,6 +353,15 @@ O resultado sempre tem o número correto de turbinas por zona. Como o `available
 5. O excesso (`|I_B| − |I_A|` turbinas) é retirado ao acaso entre as de `O_A`, para manter o bloco do doador intacto e o número exato de turbinas.
 
 Toda turbina do filho vem de um dos pais (nenhuma posição aleatória nova) e fica na mesma fundação, com o mesmo custo. Se o filho sair com o mesmo layout da base, ela é devolvida sem nova avaliação. Diferente do artigo original, não há distância mínima, porque o problema não tem essa restrição.
+
+**BlockCopy (`blockcopy`)** — adaptado do BlockCopy crossover de Mayo e Zheng (IEEE, 2015), que é mono-objetivo, contínuo e usa blocos fixos de 1 km × 1 km. Em vez de trocar a mesma região, **copia um padrão de turbinas do doador para outro lugar** da base, mantendo a arrumação relativa entre elas. O primeiro pai é a base e o segundo é o doador. Para cada zona:
+1. Sorteia a origem: um retângulo no doador, centrado numa turbina do doador, com largura e altura entre 10% e 50% das dimensões da zona (como no Block Swap).
+2. Sorteia o destino: uma fundação qualquer da zona, diferente do centro da origem. O deslocamento é Δ = destino − centro da origem, em x e em y.
+3. Remove da base as turbinas dentro do retângulo de destino (mesmo tamanho, centrado no destino).
+4. Cola as turbinas do doador que estão na origem, cada uma deslocada por Δ. As fundações de cada zona formam um grid regular, então a posição deslocada cai exatamente sobre uma fundação. Se ela não existir (fora da zona) ou estiver ocupada, a turbina é descartada.
+5. Acerta a quantidade como Mayo e Zheng: o excesso é removido ao acaso entre as turbinas que vieram da base (o padrão colado fica intacto); o déficit é preenchido em fundações livres sorteadas na zona.
+
+Δ ≠ 0 garante que o BlockCopy nunca repete o Block Swap. Diferente do Block Swap, o filho pode ter turbinas em fundações que não estavam em nenhum dos pais (as deslocadas e as do preenchimento) e, como o custo depende da fundação, o padrão colado preserva a configuração de wake, mas não o custo. Se o filho sair com o mesmo layout da base, ela é devolvida sem nova avaliação.
 
 A mutação usada é escolhida pelo 6º argumento da linha de comando (`random` ou `worst`, ver seção 3.3). As duas movem **uma** turbina de uma zona sorteada para uma fundação livre da mesma zona, o que preserva a cardinalidade. A diferença está em qual turbina é movida.
 
@@ -378,9 +387,10 @@ A potência gerada por cada turbina móvel é guardada em `Turbine::generated_po
 | Tamanho da vizinhança (T) | 10 | [moead.cpp:37](src/moead/src/metaheuristics/moead/moead.cpp#L37) |
 | Probabilidade de crossover | 0.5 | [moead.cpp:35](src/moead/src/metaheuristics/moead/moead.cpp#L35) |
 | Probabilidade de mutação | 0.5 (um sorteio para os dois filhos) | [moead.cpp:36](src/moead/src/metaheuristics/moead/moead.cpp#L36) |
-| Operador de crossover | `onepoint` (padrão) ou `blockswap` | 5º argumento, `crossover_type` em [main.cpp](src/moead/main.cpp#L15) |
+| Operador de crossover | `onepoint` (padrão), `blockswap` ou `blockcopy` | 5º argumento, `crossover_type` em [main.cpp](src/moead/main.cpp#L15) |
 | Block Swap: tamanho do retângulo | 10% a 50% da largura e da altura da zona | `BLOCK_SWAP_MIN_FRACTION`, `BLOCK_SWAP_MAX_FRACTION` em [block_swap_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_swap_crossover.cpp) |
 | Block Swap: tentativas por zona | 10 | `BLOCK_SWAP_MAX_ATTEMPTS` |
+| BlockCopy: tamanho do retângulo | 10% a 50% da largura e da altura da zona | `BLOCK_COPY_MIN_FRACTION`, `BLOCK_COPY_MAX_FRACTION` em [block_copy_crossover.cpp](src/moead/src/global_modules/genetic_operators/crossover/block_copy_crossover.cpp) |
 | Operador de mutação | `random` (padrão) ou `worst` | 6º argumento, `mutation_type` em [main.cpp](src/moead/main.cpp#L16) |
 | Worst Turbine Mutation: turbinas movidas e foco | 1 turbina; foco em custo com probabilidade λᵢ₁ do subproblema | [worst_turbine_mutation.cpp](src/moead/src/global_modules/genetic_operators/mutation/worst_turbine_mutation.cpp) |
 | Vetores de peso | Uniformes, `λᵢ = (i/(N−1), 1 − i/(N−1))` | `build_weight_vector` |
@@ -493,6 +503,7 @@ pkill -f "./main.sh"
 - Q. Zhang, H. Li. *MOEA/D: A Multiobjective Evolutionary Algorithm Based on Decomposition*. IEEE TEC, 2007.
 - X. Ju, F. Liu. *Wind farm layout optimization using self-informed genetic algorithm with information guided exploitation*. Applied Energy 248, 2019. https://doi.org/10.1016/j.apenergy.2019.04.084
 - R. Tran, J. Wu, C. Denison, T. Ackling, M. Wagner, F. Neumann. *Fast and effective multi-objective optimisation of wind turbine placement*. GECCO 2013. https://doi.org/10.1145/2463372.2463541
+- M. Mayo, C. Zheng. *BlockCopy-based operators for evolving efficient wind farm layouts*. IEEE, 2015.
 - W. Li, E. Özcan, R. John. *Multi-objective evolutionary algorithms and hyper-heuristics for wind farm layout optimisation*. Renewable Energy 105, 2017. https://doi.org/10.1016/j.renene.2016.12.022
 - Y. Chen, H. Li, B. He, P. Wang, K. Jin. *Multi-objective genetic algorithm based innovative wind farm layout optimization method*.
 - S. Rodrigues, P. Bauer, P. A. N. Bosman. *Multi-objective optimization of wind farm layouts – Complexity, constraint handling and scalability*.

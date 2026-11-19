@@ -32,6 +32,7 @@ SRC_FILES = \
     $(META_DIR)/worst_turbine_mutation.cpp \
     $(CROSS_DIR)/crossover.cpp \
     $(CROSS_DIR)/block_swap_crossover.cpp \
+    $(CROSS_DIR)/block_copy_crossover.cpp \
     $(SRC_DIR)/metaheuristics/moead/modules/generate_neighborhood.cpp \
     $(SRC_DIR)/metaheuristics/moead/modules/generate_weight_vectors.cpp \
     $(SRC_DIR)/metaheuristics/moead/modules/get_best_z_point.cpp \
