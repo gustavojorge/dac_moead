@@ -30,6 +30,7 @@ SRC_FILES = \
     $(RSOLUTION_DIR)/generate_rSolution.cpp \
     $(META_DIR)/mutation.cpp \
     $(META_DIR)/worst_turbine_mutation.cpp \
+    $(META_DIR)/movement_mutation.cpp \
     $(CROSS_DIR)/crossover.cpp \
     $(CROSS_DIR)/block_swap_crossover.cpp \
     $(CROSS_DIR)/block_copy_crossover.cpp \

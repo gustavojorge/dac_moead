@@ -15,6 +15,7 @@
 
 #include "../../../headers/global_modules/genetic_operators/mutation.h"
 #include "../../../headers/global_modules/genetic_operators/worst_turbine_mutation.h"
+#include "../../../headers/global_modules/genetic_operators/movement_mutation.h"
 #include "../../../headers/global_modules/genetic_operators/crossover.h"
 #include "../../../headers/global_modules/genetic_operators/block_swap_crossover.h"
 #include "../../../headers/global_modules/genetic_operators/block_copy_crossover.h"
@@ -109,6 +110,9 @@ void moead(vector<Solution>& population){
         if(mutation_type == "worst"){
           worst_turbine_mutation(*child1, lambda_vector[i].first);
           worst_turbine_mutation(*child2, lambda_vector[i].first);
+        } else if(mutation_type == "movement"){
+          movement_mutation(*child1);
+          movement_mutation(*child2);
         } else {
           mutation(*child1);
           mutation(*child2);

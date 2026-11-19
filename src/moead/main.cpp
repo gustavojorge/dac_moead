@@ -37,8 +37,8 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    if(mutation_type != "random" && mutation_type != "worst"){
-        cerr << "ERROR: Invalid mutation type: " << mutation_type << " (use random or worst)" << endl;
+    if(mutation_type != "random" && mutation_type != "worst" && mutation_type != "movement"){
+        cerr << "ERROR: Invalid mutation type: " << mutation_type << " (use random, worst or movement)" << endl;
         return 1;
     }
 
